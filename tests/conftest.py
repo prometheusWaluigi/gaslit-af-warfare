@@ -45,6 +45,20 @@ except ImportError:
 
 # Fixtures for biological modeling tests
 @pytest.fixture
+def sample_config():
+    """Return a sample configuration for biological modeling tests."""
+    return {
+        'params': {
+            'spike_toxicity': 0.5,
+            'cerebellar_vulnerability': 0.5,
+            'autonomic_resilience': 0.5,
+            'time_steps': 10,
+            'spatial_resolution': 20,  # Smaller grid for faster tests
+        },
+        'output_dir': 'test_results/biological_modeling'
+    }
+
+@pytest.fixture
 def bio_config():
     """Return a test configuration for biological modeling."""
     return {
@@ -248,6 +262,13 @@ def flask_client():
     with flask_app.test_client() as client:
         yield client
 
+
+@pytest.fixture
+def output_dir():
+    """Create a temporary output directory for test results."""
+    temp_dir = tempfile.mkdtemp(prefix="gaslit_af_test_")
+    yield temp_dir
+    shutil.rmtree(temp_dir)
 
 @pytest.fixture
 def test_data_dir():

@@ -49,9 +49,22 @@ except ImportError:
     print("Warning: Legal policy module not found or incomplete.")
     run_legal_simulation = None
 
+# Create Flask app function
+def create_app(test_config=None):
+    """Create and configure the Flask application."""
+    app = Flask(__name__)
+    
+    # Load default configuration
+    app.secret_key = os.environ.get('SECRET_KEY', 'gaslit-af-warstack-dev-key')
+    
+    # Override with test config if provided
+    if test_config:
+        app.config.update(test_config)
+    
+    return app
+
 # Initialize Flask app
-app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'gaslit-af-warstack-dev-key')
+app = create_app()
 
 # Configure logging
 logging.basicConfig(

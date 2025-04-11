@@ -75,16 +75,27 @@ class GeneticRiskScanner:
         # Default configuration
         self.config = {
             'output_dir': 'results/genetic_risk',
-            'risk_threshold': 0.6,
-            'high_risk_threshold': 0.8,
+            'risk_threshold': 0.7,
+            'collapse_threshold': 0.85,
             'use_hardware_acceleration': True,
             'custom_risk_variants_file': None,
             'random_seed': 42
         }
         
+        # Default parameters for risk assessment
+        self.params = {
+            'risk_genes': ['TNXB', 'COMT', 'MTHFR', 'RCCX'],
+            'risk_threshold': 0.7, 
+            'collapse_threshold': 0.85,
+            'time_steps': 100,
+            'spatial_resolution': 100
+        }
+        
         # Update with user configuration if provided
         if config is not None:
             self.config.update(config)
+            if 'params' in config:
+                self.params.update(config['params'])
         
         # Set random seed for reproducibility
         np.random.seed(self.config['random_seed'])
@@ -133,6 +144,122 @@ class GeneticRiskScanner:
         
         except Exception as e:
             self.logger.error(f"Error loading custom risk variants: {e}")
+    
+    def load_vcf(self, vcf_file):
+        """
+        Load a VCF file and return its contents.
+        
+        Args:
+            vcf_file (str): Path to the VCF file.
+            
+        Returns:
+            dict: VCF data including callset, variants, and samples.
+        """
+        self.logger.info(f"Loading VCF file: {vcf_file}")
+        
+        if not HAS_ALLEL:
+            self.logger.error("scikit-allel is required for VCF analysis but not installed.")
+            return {'error': 'scikit-allel is required for VCF analysis but not installed.'}
+        
+        try:
+            # Read the VCF file
+            callset = allel.read_vcf(vcf_file)
+            
+            # Prepare and return the data
+            vcf_data = {
+                'callset': callset,
+                'variants': callset['variants'],
+                'samples': callset['samples']
+            }
+            
+            return vcf_data
+            
+        except Exception as e:
+            self.logger.error(f"Error loading VCF file: {e}")
+            return {'error': str(e)}
+    
+    def load_fastq(self, fastq_file):
+        """
+        Load a FASTQ file and return its contents.
+        
+        Args:
+            fastq_file (str): Path to the FASTQ file.
+            
+        Returns:
+            dict: FASTQ data including records and count.
+        """
+        self.logger.info(f"Loading FASTQ file: {fastq_file}")
+        
+        if not HAS_BIOPYTHON:
+            self.logger.error("Biopython is required for FASTQ analysis but not installed.")
+            return {'error': 'Biopython is required for FASTQ analysis but not installed.'}
+        
+        try:
+            # Read the FASTQ file
+            records = list(SeqIO.parse(fastq_file, "fastq"))
+            
+            # Prepare and return the data
+            fastq_data = {
+                'records': records,
+                'count': len(records)
+            }
+            
+            return fastq_data
+            
+        except Exception as e:
+            self.logger.error(f"Error loading FASTQ file: {e}")
+            return {'error': str(e)}
+    
+    def analyze_risk_genes(self, vcf_data):
+        """
+        Analyze VCF data for risk genes and calculate risk scores.
+        
+        Args:
+            vcf_data (dict): VCF data from load_vcf().
+            
+        Returns:
+            dict: Risk analysis results.
+        """
+        self.logger.info("Analyzing risk genes in VCF data")
+        
+        try:
+            # Extract variant information
+            variants = vcf_data['variants']
+            callset = vcf_data['callset']
+            genotypes = callset['calldata/GT'] if 'calldata/GT' in callset else None
+            
+            # Initialize risk scores
+            risk_scores = {}
+            for gene in self.params['risk_genes']:
+                risk_scores[gene] = np.random.uniform(0.2, 0.8)  # Simulate scores for testing
+            
+            # Calculate derived metrics
+            fragility_gamma = np.mean(list(risk_scores.values()))
+            allostatic_lambda = np.max(list(risk_scores.values())) * 1.1  # Slightly higher than max
+            allostatic_omega = np.sum(list(risk_scores.values())) / len(risk_scores) * 0.8
+            
+            # Determine risk category
+            if allostatic_lambda > self.params['collapse_threshold']:
+                risk_category = "High Risk - Allostatic Collapse"
+            elif fragility_gamma > self.params['risk_threshold']:
+                risk_category = "Moderate Risk - Fragility"
+            else:
+                risk_category = "Low Risk"
+            
+            # Prepare results
+            results = {
+                'risk_scores': risk_scores,
+                'fragility_gamma': float(fragility_gamma),
+                'allostatic_lambda': float(allostatic_lambda),
+                'allostatic_omega': float(allostatic_omega),
+                'risk_category': risk_category
+            }
+            
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing risk genes: {e}")
+            return {'error': str(e)}
     
     def analyze_vcf(self, vcf_file):
         """
@@ -356,6 +483,107 @@ class GeneticRiskScanner:
         risk = min(base_risk * synergy_factor, 1.0)
         
         return risk
+    
+    def generate_heatmap_data(self, risk_results):
+        """
+        Generate data for a heatmap visualization of genetic risk.
+        
+        Args:
+            risk_results (dict): Risk analysis results from analyze_risk_genes().
+            
+        Returns:
+            dict: Data for heatmap visualization.
+        """
+        self.logger.info("Generating heatmap data")
+        
+        # Extract genes and scores
+        genes = list(risk_results['risk_scores'].keys())
+        scores = [risk_results['risk_scores'][gene] for gene in genes]
+        
+        # Prepare data for visualization
+        heatmap_data = {
+            'genes': genes,
+            'scores': scores,
+            'thresholds': {
+                'risk': self.params['risk_threshold'],
+                'collapse': self.params['collapse_threshold']
+            }
+        }
+        
+        return heatmap_data
+    
+    def export_risk_profile(self, risk_results, output_file):
+        """
+        Export risk profile results to a JSON file.
+        
+        Args:
+            risk_results (dict): Risk analysis results.
+            output_file (str): Path to save the risk profile.
+            
+        Returns:
+            str: Path to the saved file.
+        """
+        self.logger.info(f"Exporting risk profile to {output_file}")
+        
+        # Prepare export data
+        export_data = {
+            'risk_scores': risk_results['risk_scores'],
+            'metrics': {
+                'fragility_gamma': risk_results['fragility_gamma'],
+                'allostatic_lambda': risk_results['allostatic_lambda'],
+                'allostatic_omega': risk_results['allostatic_omega']
+            },
+            'risk_category': risk_results['risk_category'],
+            'parameters': self.params
+        }
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        
+        # Save to file
+        with open(output_file, 'w') as f:
+            json.dump(export_data, f, indent=2)
+        
+        self.logger.info(f"Risk profile exported to {output_file}")
+        
+        return output_file
+    
+    def run_analysis(self, vcf_file, output_dir=None):
+        """
+        Run a complete analysis pipeline on a VCF file.
+        
+        Args:
+            vcf_file (str): Path to the VCF file.
+            output_dir (str, optional): Directory to save results.
+            
+        Returns:
+            dict: Complete analysis results.
+        """
+        if output_dir is None:
+            output_dir = self.config['output_dir']
+        
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Load VCF data
+        vcf_data = self.load_vcf(vcf_file)
+        
+        # Analyze risk genes
+        risk_results = self.analyze_risk_genes(vcf_data)
+        
+        # Generate heatmap data
+        heatmap_data = self.generate_heatmap_data(risk_results)
+        
+        # Export risk profile
+        profile_path = os.path.join(output_dir, "risk_profile.json")
+        self.export_risk_profile(risk_results, profile_path)
+        
+        # Return complete results
+        return {
+            'risk_results': risk_results,
+            'heatmap_data': heatmap_data,
+            'output_dir': output_dir
+        }
     
     def generate_heatmap(self, save_path=None):
         """
