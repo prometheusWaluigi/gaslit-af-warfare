@@ -6,121 +6,168 @@ A modular simulation-and-exposure engine designed to prove institutional culpabi
 
 GASLIT-AF WARSTACK is a comprehensive computational framework that models the biological, genetic, institutional, legal, and advocacy dimensions of systemic health impacts. The project aims to simulate and visualize complex feedback loops between biological mechanisms, institutional responses, and policy decisions.
 
-## Architecture
-
-The project is structured in five interconnected layers:
-
-### 🔬 1. Biological Modeling Layer
-
+### 🔬 Biological Modeling Layer
 Simulates the core GASLIT-AF attractor states: spike protein neurotoxicity → cerebellar trauma → behavioral and autonomic collapse.
+- **Stack**: Python (NumPy, SciPy, PyTorch), SYCL/OneAPI for Intel A770, C++ if performance needed
+- **Deliverables**:
+  - KPZ / fKPZχ simulations of neuroimmune dynamics
+  - ODE/PDE attractor maps showing irreversible system transitions
+  - Phase portraits of feedback loop entrapment
 
-**Technologies:**
-- Python (NumPy, SciPy, PyTorch)
-- SYCL/OneAPI for Intel A770 acceleration
-- C++ for performance-critical components
-
-**Key Components:**
-- KPZ / fKPZχ simulations of neuroimmune dynamics
-- ODE/PDE attractor maps showing irreversible system transitions
-- Phase portraits of feedback loop entrapment
-
-### 🧬 2. Genetic Risk Scanning Layer
-
+### 🧬 Genetic Risk Scanning Layer
 Parse FASTQ/VCF files for fragility architecture (γ) and allostatic collapse risk (Λ, Ω).
+- **Stack**: Python (scikit-allel, Biopython), Intel OneAPI, AVX2 optimization, Dockerized CLI pipelines
+- **Deliverables**:
+  - Heatmaps of variant fragility (e.g., TNXB, COMT, MTHFR, RCCX)
+  - GASLIT-AF phenotype index per genome
+  - Exportable JSON risk profiles for downstream modules
 
-**Technologies:**
-- Python (scikit-allel, Biopython)
-- Intel OneAPI
-- AVX2 optimization
-- Dockerized CLI pipelines
-
-**Key Components:**
-- Heatmaps of variant fragility (e.g., TNXB, COMT, MTHFR, RCCX)
-- GASLIT-AF phenotype index per genome
-- Exportable JSON risk profiles for downstream modules
-
-### 🕸 3. Institutional Feedback Modeling
-
+### 🕸 Institutional Feedback Modeling
 Build dynamic denial-injury-denial loops, regulatory capture graphs, and memetic immunosuppression nets.
+- **Stack**: Python (NetworkX, DynSysLib), GPT-in-the-loop for narrative evolution, Graphviz for causal webs
+- **Deliverables**:
+  - Denial recursion maps
+  - System legitimacy entropy index
+  - Attractor state simulation for CDC/FDA/Media narrative collapse
 
-**Technologies:**
-- Python (NetworkX, DynSysLib)
-- GPT-in-the-loop for narrative evolution
-- Graphviz for causal webs
-
-**Key Components:**
-- Denial recursion maps
-- System legitimacy entropy index
-- Attractor state simulation for CDC/FDA/Media narrative collapse
-
-### ⚖️ 4. Legal & Policy Simulation Layer
-
+### ⚖️ Legal & Policy Simulation Layer
 Run simulation logic against the legal narrative layer: NCVIA, EUA claims, suppressed data trails, ethical obligations.
+- **Stack**: PyPDF2, LangChain, spaCy, HuggingFace (legal LLMs), graph-based legal precedents
+- **Deliverables**:
+  - Predictive simulations for class action viability
+  - "Liability Shield Breach" risk thresholds
+  - Timelines of known suppression vs scientific publishing lags
 
-**Technologies:**
-- PyPDF2, LangChain, spaCy
-- HuggingFace (legal LLMs)
-- Graph-based legal precedents
-
-**Key Components:**
-- Predictive simulations for class action viability
-- "Liability Shield Breach" risk thresholds
-- Timelines of known suppression vs scientific publishing lags
-
-### 🛡 5. Front-End Advocacy Layer
-
+### 🛡 Front-End Advocacy Layer
 Make it real. n=1 testimonies, real-time genetic risk visualizations, attractor dashboards.
+- **Stack**: Flask, Bootstrap, D3.js
+- **Deliverables**:
+  - Dynamic dashboard of systemic harm
+  - User-uploadable genome analysis (consented)
+  - "Tell Your Story" portal that maps symptoms → loops → systems → blame
 
-**Technologies:**
-- React + Tailwind (Next.js)
-- D3.js
-- HuggingFace Spaces for story-driven AI overlays
+## Project Structure
 
-**Key Components:**
-- Dynamic dashboard of systemic harm
-- User-uploadable genome analysis (consented)
-- "Tell Your Story" portal that maps symptoms → loops → systems → blame
+```
+gaslit-af-warfare/
+├── data/                      # Data storage directory
+├── docs/                      # Documentation
+├── src/                       # Source code
+│   ├── biological_modeling/   # Biological modeling module
+│   ├── genetic_risk/          # Genetic risk scanning module
+│   ├── institutional_feedback/# Institutional feedback modeling module
+│   ├── legal_policy/          # Legal & policy simulation module
+│   └── frontend/              # Frontend Flask application
+│       ├── static/            # Static files (CSS, JS, images)
+│       └── templates/         # HTML templates
+├── tests/                     # Test suite
+│   ├── conftest.py            # Pytest configuration and fixtures
+│   ├── test_biological_modeling.py
+│   ├── test_genetic_risk.py
+│   ├── test_institutional_feedback.py
+│   ├── test_legal_policy.py
+│   └── test_frontend.py
+├── docker/                    # Docker configuration
+├── .gitignore                 # Git ignore file
+├── Dockerfile                 # Main Dockerfile
+├── docker-compose.yml         # Docker Compose configuration
+├── gaslit-af-runner.py        # CLI runner script
+├── LICENSE                    # AGPL License
+├── pytest.ini                 # Pytest configuration
+└── requirements.txt           # Python dependencies
+```
 
-## Getting Started
+## Installation
 
 ### Prerequisites
 
-- Python 3.10+
-- Docker and Docker Compose
-- Intel OneAPI toolkit
-- Node.js 18+ (for front-end development)
+- Python 3.9+
+- Docker (optional, for containerized deployment)
+- Intel OneAPI (optional, for hardware acceleration)
 
-### Installation
+### Setup
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/gaslit-af-warfare.git
+   cd gaslit-af-warfare
+   ```
+
+2. Create a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Install optional dependencies for hardware acceleration (Intel A770):
+   ```bash
+   pip install intel-extension-for-pytorch
+   ```
+
+### Docker Setup
+
+1. Build the Docker image:
+   ```bash
+   docker build -t gaslit-af-warstack .
+   ```
+
+2. Run the Docker container:
+   ```bash
+   docker-compose up
+   ```
+
+## Usage
+
+### Running the CLI
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/gaslit-af-warfare.git
-cd gaslit-af-warfare
-
-# Set up Python environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Build Docker containers
-docker-compose build
-
-# Run the simulation
-python gaslit-af-runner.py
+python gaslit-af-runner.py --module biological --output results/bio_results.json
+python gaslit-af-runner.py --module genetic --input data/sample.vcf --output results/genetic_results.json
+python gaslit-af-runner.py --module institutional --output results/institutional_results.json
+python gaslit-af-runner.py --module legal --output results/legal_results.json
 ```
 
-## Development Roadmap
+### Running the Web Interface
 
-1. Implement core biological modeling components
-2. Develop genetic risk scanning modules
-3. Build institutional feedback simulation
-4. Integrate legal and policy analysis
-5. Create front-end visualization and advocacy tools
+```bash
+python -m src.frontend.app
+```
+
+Then open your browser to http://localhost:5000
+
+## Testing
+
+Run the test suite:
+
+```bash
+pytest
+```
+
+Run tests for a specific module:
+
+```bash
+pytest tests/test_biological_modeling.py
+```
+
+Run tests with a specific marker:
+
+```bash
+pytest -m biological
+```
 
 ## License
 
-This project is licensed under the AGPL License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
-Contributions are welcome. Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request

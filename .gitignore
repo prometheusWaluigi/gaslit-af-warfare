@@ -1,12 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -23,53 +19,63 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
+# Virtual Environment
+venv/
+env/
+ENV/
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
+# Testing
 .coverage
-.coverage.*
-.cache
-nosetests.xml
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
 coverage.xml
 *.cover
 .hypothesis/
-.pytest_cache/
+test_report.json
+test_report.html
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
-.python-version
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# IDE files
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Project specific
-output/
-data/samples/
-*.log
-.DS_Store
+data/*
+!data/.gitkeep
+results/*
+!results/.gitkeep
+logs/*
+!logs/.gitkeep
 
-# Intel OneAPI
-.oneapi/
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Docker
+.docker/
+
+# Temporary files
+*.tmp
+*.bak
+*.log

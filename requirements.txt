@@ -1,38 +1,48 @@
-# Core scientific libraries
+# Core dependencies
 numpy>=1.20.0
 scipy>=1.7.0
 matplotlib>=3.4.0
 pandas>=1.3.0
 
-# Machine learning and deep learning
-scikit-learn>=1.0.0
-torch>=1.10.0
-torchvision>=0.11.0
+# Biological modeling
+torch>=1.9.0
+intel-extension-for-pytorch>=1.12.0  # Optional, for Intel A770 acceleration
+dpctl>=0.14.0  # Optional, for Intel A770 acceleration
 
-# Genetic analysis
+# Genetic risk scanning
 scikit-allel>=1.3.5
 biopython>=1.79
 
-# Network analysis
+# Institutional feedback modeling
 networkx>=2.6.0
+graphviz>=0.17.0
 
-# NLP and document processing
+# Legal & policy simulation
 spacy>=3.2.0
-langchain>=0.0.1
 pypdf2>=2.0.0
-transformers>=4.15.0
+langchain>=0.0.139
+transformers>=4.18.0
 
-# Web and visualization
+# Frontend
 flask>=2.0.0
-dash>=2.0.0
-plotly>=5.5.0
+flask-wtf>=1.0.0
+flask-sqlalchemy>=2.5.0
+flask-migrate>=3.1.0
+flask-login>=0.6.0
+flask-cors>=3.0.10
+jinja2>=3.0.0
+werkzeug>=2.0.0
 
-# Intel OneAPI (optional)
-# Install from: https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit-download.html
-# dpctl
-# dpcpp-cpp-rt
+# Testing
+pytest>=7.0.0
+pytest-cov>=3.0.0
+pytest-mock>=3.7.0
+pytest-html>=3.1.0
+pytest-json-report>=1.5.0
 
-# Testing and development
-pytest>=6.2.5
-black>=21.12b0
-flake8>=4.0.1
+# Development
+black>=22.3.0
+flake8>=4.0.0
+isort>=5.10.0
+mypy>=0.950
+pylint>=2.13.0

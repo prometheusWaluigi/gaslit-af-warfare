@@ -1,22 +1,21 @@
-FROM python:3.10-slim
+FROM python:3.9-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV DEBIAN_FRONTEND=noninteractive
+LABEL maintainer="GASLIT-AF WARSTACK Team"
+LABEL description="GASLIT-AF WARSTACK - A modular simulation-and-exposure engine"
+LABEL version="0.1.0"
+
+# Set working directory
+WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    curl \
+    gcc \
+    g++ \
     git \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
-WORKDIR /app
 
 # Copy requirements file
 COPY requirements.txt .
@@ -27,8 +26,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project files
 COPY . .
 
-# Make scripts executable
-RUN chmod +x gaslit-af-runner.py
+# Create necessary directories
+RUN mkdir -p data results logs
 
-# Default command
-CMD ["python", "gaslit-af-runner.py"]
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV FLASK_APP=src/frontend/app.py
+ENV FLASK_ENV=production
+
+# Expose port for Flask app
+EXPOSE 5000
+
+# Command to run the application
+CMD ["python", "-m", "src.frontend.app"]
