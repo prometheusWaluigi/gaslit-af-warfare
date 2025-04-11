@@ -1,382 +1,488 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Frontend Advocacy Layer for GASLIT-AF WARSTACK
+Frontend Application for GASLIT-AF WARSTACK
 
-This module implements a Flask-based web application for the frontend advocacy layer,
-providing dynamic dashboards, user-uploadable genome analysis, and a "Tell Your Story" portal.
+This module provides a web interface for the GASLIT-AF WARSTACK project,
+allowing users to run simulations, visualize results, and submit testimonies.
 """
 
 import os
+import sys
 import json
+import time
+import datetime
 import logging
-from typing import Dict, List, Any, Optional
-from datetime import datetime
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for server environment
+import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_from_directory
+import io
+import base64
+from werkzeug.utils import secure_filename
+
+# Add the project root to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+# Import modules
+try:
+    from src.biological_modeling.neuroimmune_simulator import NeuroimmuneDynamics, run_sample_simulation as run_bio_simulation
+except ImportError:
+    print("Warning: Biological modeling module not found or incomplete.")
+    run_bio_simulation = None
+
+try:
+    from src.genetic_risk.genetic_scanner import GeneticRiskScanner, run_sample_analysis as run_genetic_analysis
+except ImportError:
+    print("Warning: Genetic risk scanning module not found or incomplete.")
+    run_genetic_analysis = None
+
+try:
+    from src.institutional_feedback.institutional_model import InstitutionalFeedbackModel, run_sample_simulation as run_institutional_simulation
+except ImportError:
+    print("Warning: Institutional feedback module not found or incomplete.")
+    run_institutional_simulation = None
+
+try:
+    from src.legal_policy.legal_simulator import LegalPolicySimulator, run_sample_simulation as run_legal_simulation
+except ImportError:
+    print("Warning: Legal policy module not found or incomplete.")
+    run_legal_simulation = None
+
+# Initialize Flask app
+app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'gaslit-af-warstack-dev-key')
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(os.path.join('logs', 'frontend.log')),
+        logging.StreamHandler()
+    ]
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('frontend')
 
-# Initialize Flask app
-app = Flask(__name__, 
-            static_folder='static',
-            template_folder='templates')
-app.secret_key = os.environ.get('SECRET_KEY', 'gaslit-af-development-key')
+# Create necessary directories
+os.makedirs('logs', exist_ok=True)
+os.makedirs('results', exist_ok=True)
+os.makedirs('uploads', exist_ok=True)
 
-# Import modules from other layers (with error handling)
-try:
-    from src.biological_modeling.neuroimmune_simulator import NeuroimmuneDynamics
-    HAS_BIO_MODULE = True
-except ImportError:
-    logger.warning("Biological modeling module not available")
-    HAS_BIO_MODULE = False
+# Configuration
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'vcf', 'fastq', 'fq', 'json'}
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
 
-try:
-    from src.genetic_risk.genetic_scanner import GeneticRiskScanner
-    HAS_GENETIC_MODULE = True
-except ImportError:
-    logger.warning("Genetic risk module not available")
-    HAS_GENETIC_MODULE = False
-
-try:
-    from src.institutional_feedback.institutional_model import InstitutionalFeedbackModel
-    HAS_INSTITUTIONAL_MODULE = True
-except ImportError:
-    logger.warning("Institutional feedback module not available")
-    HAS_INSTITUTIONAL_MODULE = False
-
-try:
-    from src.legal_policy.legal_simulator import LegalPolicySimulator
-    HAS_LEGAL_MODULE = True
-except ImportError:
-    logger.warning("Legal policy module not available")
-    HAS_LEGAL_MODULE = False
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
 
-# Data storage (in-memory for development, would use a database in production)
-testimonies = []
-uploaded_genomes = []
-simulation_results = {}
+def allowed_file(filename):
+    """Check if a file has an allowed extension."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def generate_plot_base64(fig):
+    """Convert a matplotlib figure to a base64 encoded string."""
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+    buf.seek(0)
+    img_str = base64.b64encode(buf.read()).decode('utf-8')
+    plt.close(fig)
+    return img_str
 
 
 @app.route('/')
 def index():
     """Render the home page."""
-    return render_template('index.html', 
-                          modules={
-                              'bio': HAS_BIO_MODULE,
-                              'genetic': HAS_GENETIC_MODULE,
-                              'institutional': HAS_INSTITUTIONAL_MODULE,
-                              'legal': HAS_LEGAL_MODULE
-                          })
+    return render_template('index.html')
 
 
 @app.route('/dashboard')
 def dashboard():
-    """Render the main dashboard."""
-    # Load sample data if no simulation results exist
-    if not simulation_results:
-        _load_sample_data()
-    
-    return render_template('dashboard.html', 
-                          results=simulation_results,
-                          testimonies_count=len(testimonies),
-                          genomes_count=len(uploaded_genomes))
+    """Render the dashboard page."""
+    return render_template('dashboard.html')
 
 
-@app.route('/biological')
-def biological_dashboard():
-    """Render the biological modeling dashboard."""
-    if not HAS_BIO_MODULE:
-        flash("Biological modeling module not available", "warning")
-        return redirect(url_for('dashboard'))
-    
-    # Get simulation results or run a sample simulation
-    bio_results = simulation_results.get('biological', {})
-    if not bio_results and HAS_BIO_MODULE:
+@app.route('/biological', methods=['GET', 'POST'])
+def biological():
+    """Render the biological modeling page."""
+    if request.method == 'POST':
+        # Get form data
+        grid_size = int(request.form.get('grid_size', 100))
+        time_steps = int(request.form.get('time_steps', 500))
+        initial_condition = request.form.get('initial_condition', 'random')
+        
+        # Create configuration
+        config = {
+            'grid_size': grid_size,
+            'time_steps': time_steps,
+            'initial_condition': initial_condition,
+            'output_dir': 'results/biological_modeling'
+        }
+        
+        # Run simulation
         try:
-            simulator = NeuroimmuneDynamics()
-            bio_results = simulator.run_simulation(time_steps=100)
-            simulation_results['biological'] = bio_results
+            simulator = NeuroimmuneDynamics(config)
+            simulator.initialize_grid()
+            simulator.run_simulation()
+            
+            # Generate visualizations
+            simulator.visualize_grid(save_path='static/img/biological/final_state.png')
+            
+            param1_range = np.linspace(0.1, 1.0, 5)
+            param2_range = np.linspace(0.1, 1.0, 5)
+            simulator.generate_phase_portrait(param1_range, param2_range)
+            simulator.visualize_phase_portrait(save_path='static/img/biological/phase_portrait.png')
+            
+            # Save results
+            results_file = simulator.save_results()
+            
+            flash('Simulation completed successfully!', 'success')
+            return render_template('biological.html', 
+                                  final_state_img='img/biological/final_state.png',
+                                  phase_portrait_img='img/biological/phase_portrait.png',
+                                  results_file=os.path.basename(results_file),
+                                  config=config)
+        
         except Exception as e:
             logger.error(f"Error running biological simulation: {e}")
-            flash(f"Error running simulation: {str(e)}", "danger")
+            flash(f'Error running simulation: {str(e)}', 'error')
     
-    return render_template('biological.html', results=bio_results)
+    return render_template('biological.html')
 
 
-@app.route('/genetic')
-def genetic_dashboard():
-    """Render the genetic risk dashboard."""
-    if not HAS_GENETIC_MODULE:
-        flash("Genetic risk module not available", "warning")
-        return redirect(url_for('dashboard'))
-    
-    # Get analysis results or run a sample analysis
-    genetic_results = simulation_results.get('genetic', {})
-    
-    return render_template('genetic.html', 
-                          results=genetic_results,
-                          uploaded_genomes=uploaded_genomes)
-
-
-@app.route('/upload_genome', methods=['GET', 'POST'])
-def upload_genome():
-    """Handle genome file uploads."""
+@app.route('/genetic', methods=['GET', 'POST'])
+def genetic():
+    """Render the genetic risk scanning page."""
     if request.method == 'POST':
-        if 'genome_file' not in request.files:
-            flash('No file part', 'danger')
+        # Check if a file was uploaded
+        if 'file' not in request.files:
+            flash('No file part', 'error')
             return redirect(request.url)
         
-        file = request.files['genome_file']
+        file = request.files['file']
+        
         if file.filename == '':
-            flash('No selected file', 'danger')
+            flash('No selected file', 'error')
             return redirect(request.url)
         
-        if file:
-            # In a real implementation, save the file and process it
-            # For now, just store metadata
-            genome_info = {
-                'filename': file.filename,
-                'upload_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'size': len(file.read()),
-                'status': 'pending',
-                'id': len(uploaded_genomes) + 1
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            # Create configuration
+            config = {
+                'output_dir': 'results/genetic_risk'
             }
             
-            uploaded_genomes.append(genome_info)
-            flash('Genome file uploaded successfully', 'success')
-            return redirect(url_for('genetic_dashboard'))
+            # Run analysis
+            try:
+                scanner = GeneticRiskScanner(config)
+                results = scanner.analyze_file(filepath)
+                
+                # Generate visualizations
+                scanner.generate_heatmap(save_path='static/img/genetic/variant_heatmap.png')
+                
+                # Generate risk profile
+                risk_profile = scanner.generate_risk_profile(save_path='results/genetic_risk/risk_profile.json')
+                
+                # Save results
+                results_file = scanner.save_results()
+                
+                flash('Genetic analysis completed successfully!', 'success')
+                return render_template('genetic.html', 
+                                      heatmap_img='img/genetic/variant_heatmap.png',
+                                      results=results,
+                                      risk_profile=risk_profile,
+                                      results_file=os.path.basename(results_file))
+            
+            except Exception as e:
+                logger.error(f"Error running genetic analysis: {e}")
+                flash(f'Error running analysis: {str(e)}', 'error')
+        else:
+            flash('File type not allowed', 'error')
     
-    return render_template('upload_genome.html')
+    return render_template('genetic.html')
 
 
-@app.route('/institutional')
-def institutional_dashboard():
-    """Render the institutional feedback dashboard."""
-    if not HAS_INSTITUTIONAL_MODULE:
-        flash("Institutional feedback module not available", "warning")
-        return redirect(url_for('dashboard'))
-    
-    # Get simulation results or run a sample simulation
-    inst_results = simulation_results.get('institutional', {})
-    if not inst_results and HAS_INSTITUTIONAL_MODULE:
+@app.route('/institutional', methods=['GET', 'POST'])
+def institutional():
+    """Render the institutional feedback modeling page."""
+    if request.method == 'POST':
+        # Get form data
+        network_size = int(request.form.get('network_size', 10))
+        simulation_steps = int(request.form.get('simulation_steps', 50))
+        initial_entropy = float(request.form.get('initial_entropy', 0.1))
+        
+        # Create configuration
+        config = {
+            'network_size': network_size,
+            'simulation_steps': simulation_steps,
+            'initial_entropy': initial_entropy,
+            'output_dir': 'results/institutional_feedback'
+        }
+        
+        # Run simulation
         try:
-            model = InstitutionalFeedbackModel()
-            inst_results = model.run_simulation(time_steps=50)
-            simulation_results['institutional'] = inst_results
+            model = InstitutionalFeedbackModel(config)
+            model.run_simulation()
+            
+            # Generate visualizations
+            model.visualize_network(save_path='static/img/institutional/network.png')
+            model.visualize_simulation_results(save_path='static/img/institutional/simulation_results.png')
+            
+            # Save results
+            results_file = model.save_results()
+            
+            flash('Simulation completed successfully!', 'success')
+            return render_template('institutional.html', 
+                                  network_img='img/institutional/network.png',
+                                  results_img='img/institutional/simulation_results.png',
+                                  results_file=os.path.basename(results_file),
+                                  config=config)
+        
         except Exception as e:
             logger.error(f"Error running institutional simulation: {e}")
-            flash(f"Error running simulation: {str(e)}", "danger")
+            flash(f'Error running simulation: {str(e)}', 'error')
     
-    return render_template('institutional.html', results=inst_results)
+    return render_template('institutional.html')
 
 
-@app.route('/legal')
-def legal_dashboard():
-    """Render the legal and policy dashboard."""
-    if not HAS_LEGAL_MODULE:
-        flash("Legal policy module not available", "warning")
-        return redirect(url_for('dashboard'))
-    
-    # Get simulation results or run a sample simulation
-    legal_results = simulation_results.get('legal', {})
-    if not legal_results and HAS_LEGAL_MODULE:
+@app.route('/legal', methods=['GET', 'POST'])
+def legal():
+    """Render the legal policy simulation page."""
+    if request.method == 'POST':
+        # Get form data
+        simulation_steps = int(request.form.get('simulation_steps', 50))
+        initial_evidence = float(request.form.get('initial_evidence', 0.1))
+        shield_decay_rate = float(request.form.get('shield_decay_rate', 0.01))
+        
+        # Create configuration
+        config = {
+            'simulation_steps': simulation_steps,
+            'initial_evidence_level': initial_evidence,
+            'shield_decay_rate': shield_decay_rate,
+            'output_dir': 'results/legal_policy'
+        }
+        
+        # Run simulation
         try:
-            simulator = LegalPolicySimulator()
-            legal_results = simulator.run_simulation()
-            simulation_results['legal'] = legal_results
+            simulator = LegalPolicySimulator(config)
+            simulator.run_simulation()
+            
+            # Generate visualizations
+            simulator.visualize_simulation_results(save_path='static/img/legal/simulation_results.png')
+            
+            # Save results
+            results_file = simulator.save_results()
+            
+            flash('Simulation completed successfully!', 'success')
+            return render_template('legal.html', 
+                                  results_img='img/legal/simulation_results.png',
+                                  results_file=os.path.basename(results_file),
+                                  config=config)
+        
         except Exception as e:
             logger.error(f"Error running legal simulation: {e}")
-            flash(f"Error running simulation: {str(e)}", "danger")
+            flash(f'Error running simulation: {str(e)}', 'error')
     
-    return render_template('legal.html', results=legal_results)
+    return render_template('legal.html')
 
 
 @app.route('/tell-your-story', methods=['GET', 'POST'])
 def tell_your_story():
-    """Handle user testimonies."""
+    """Render the testimony submission page."""
     if request.method == 'POST':
-        name = request.form.get('name', 'Anonymous')
+        # Get form data
+        name = request.form.get('name', '')
         email = request.form.get('email', '')
+        age_range = request.form.get('age_range', '')
         story = request.form.get('story', '')
+        institutional_response = request.form.get('institutional_response', '')
         symptoms = request.form.getlist('symptoms')
+        other_symptoms = request.form.get('other_symptoms', '')
+        onset_date = request.form.get('onset_date', '')
+        contact_consent = 'contact_consent' in request.form
         
-        if not story:
-            flash('Please provide your story', 'danger')
-            return redirect(request.url)
-        
-        # In a real implementation, validate and store in a database
+        # Create testimony data
         testimony = {
             'name': name,
             'email': email,
+            'age_range': age_range,
             'story': story,
+            'institutional_response': institutional_response,
             'symptoms': symptoms,
-            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'id': len(testimonies) + 1
+            'other_symptoms': other_symptoms,
+            'onset_date': onset_date,
+            'contact_consent': contact_consent,
+            'submission_date': datetime.datetime.now().isoformat()
         }
         
-        testimonies.append(testimony)
-        flash('Your story has been submitted successfully', 'success')
-        return redirect(url_for('testimonies'))
+        # Save testimony
+        try:
+            os.makedirs('data/testimonies', exist_ok=True)
+            filename = f"testimony_{int(time.time())}.json"
+            filepath = os.path.join('data/testimonies', filename)
+            
+            with open(filepath, 'w') as f:
+                json.dump(testimony, f, indent=2)
+            
+            flash('Thank you for sharing your story!', 'success')
+            return redirect(url_for('testimonies'))
+        
+        except Exception as e:
+            logger.error(f"Error saving testimony: {e}")
+            flash(f'Error saving testimony: {str(e)}', 'error')
     
     return render_template('tell_your_story.html')
 
 
 @app.route('/testimonies')
-def testimonies_page():
-    """Display user testimonies."""
-    return render_template('testimonies.html', testimonies=testimonies)
+def testimonies():
+    """Render the testimonies page."""
+    # Load testimonies
+    testimony_list = []
+    testimonies_dir = 'data/testimonies'
+    
+    if os.path.exists(testimonies_dir):
+        for filename in os.listdir(testimonies_dir):
+            if filename.endswith('.json'):
+                try:
+                    with open(os.path.join(testimonies_dir, filename), 'r') as f:
+                        testimony = json.load(f)
+                        testimony_list.append(testimony)
+                except Exception as e:
+                    logger.error(f"Error loading testimony {filename}: {e}")
+    
+    # Sort by submission date (newest first)
+    testimony_list.sort(key=lambda x: x.get('submission_date', ''), reverse=True)
+    
+    return render_template('testimonies.html', testimonies=testimony_list)
 
 
-@app.route('/api/simulation/<module>', methods=['POST'])
-def run_simulation_api(module):
-    """API endpoint to run simulations."""
-    if module == 'biological' and HAS_BIO_MODULE:
-        try:
-            params = request.json or {}
-            simulator = NeuroimmuneDynamics({'params': params})
-            results = simulator.run_simulation()
-            simulation_results['biological'] = results
-            return jsonify({'success': True, 'results': results})
-        except Exception as e:
-            logger.error(f"Error running biological simulation: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+@app.route('/upload-genome', methods=['GET', 'POST'])
+def upload_genome():
+    """Render the genome upload page."""
+    if request.method == 'POST':
+        # Check if a file was uploaded
+        if 'file' not in request.files:
+            flash('No file part', 'error')
+            return redirect(request.url)
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            flash('No selected file', 'error')
+            return redirect(request.url)
+        
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            
+            # Get form data
+            data_source = request.form.get('data_source', '')
+            notes = request.form.get('notes', '')
+            research_consent = 'research_consent' in request.form
+            
+            # Save metadata
+            try:
+                os.makedirs('data/genomes', exist_ok=True)
+                metadata = {
+                    'filename': filename,
+                    'original_filename': file.filename,
+                    'file_path': filepath,
+                    'file_size': os.path.getsize(filepath),
+                    'data_source': data_source,
+                    'notes': notes,
+                    'upload_date': datetime.datetime.now().isoformat(),
+                    'research_consent': research_consent
+                }
+                
+                metadata_file = os.path.join('data/genomes', f"{os.path.splitext(filename)[0]}_metadata.json")
+                with open(metadata_file, 'w') as f:
+                    json.dump(metadata, f, indent=2)
+                
+                flash('Genome uploaded successfully!', 'success')
+                return redirect(url_for('genetic'))
+            
+            except Exception as e:
+                logger.error(f"Error saving genome metadata: {e}")
+                flash(f'Error saving genome metadata: {str(e)}', 'error')
+        else:
+            flash('File type not allowed', 'error')
     
-    elif module == 'genetic' and HAS_GENETIC_MODULE:
-        try:
-            params = request.json or {}
-            scanner = GeneticRiskScanner({'params': params})
-            # In a real implementation, this would process an actual VCF file
-            # For now, use the sample analysis
-            results = scanner.run_sample_analysis()
-            simulation_results['genetic'] = results
-            return jsonify({'success': True, 'results': results})
-        except Exception as e:
-            logger.error(f"Error running genetic analysis: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
+    return render_template('upload_genome.html')
+
+
+@app.route('/run-sample/<module>')
+def run_sample(module):
+    """Run a sample simulation for the specified module."""
+    try:
+        if module == 'biological' and run_bio_simulation:
+            simulator = run_bio_simulation()
+            flash('Sample biological simulation completed successfully!', 'success')
+            return redirect(url_for('biological'))
+        
+        elif module == 'genetic' and run_genetic_analysis:
+            scanner = run_genetic_analysis()
+            flash('Sample genetic analysis completed successfully!', 'success')
+            return redirect(url_for('genetic'))
+        
+        elif module == 'institutional' and run_institutional_simulation:
+            model = run_institutional_simulation()
+            flash('Sample institutional simulation completed successfully!', 'success')
+            return redirect(url_for('institutional'))
+        
+        elif module == 'legal' and run_legal_simulation:
+            simulator = run_legal_simulation()
+            flash('Sample legal simulation completed successfully!', 'success')
+            return redirect(url_for('legal'))
+        
+        else:
+            flash(f'Sample simulation for {module} module not available', 'error')
+            return redirect(url_for('index'))
     
-    elif module == 'institutional' and HAS_INSTITUTIONAL_MODULE:
-        try:
-            params = request.json or {}
-            model = InstitutionalFeedbackModel({'params': params})
-            results = model.run_simulation()
-            simulation_results['institutional'] = results
-            return jsonify({'success': True, 'results': results})
-        except Exception as e:
-            logger.error(f"Error running institutional simulation: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-    
-    elif module == 'legal' and HAS_LEGAL_MODULE:
-        try:
-            params = request.json or {}
-            simulator = LegalPolicySimulator({'params': params})
-            results = simulator.run_simulation()
-            simulation_results['legal'] = results
-            return jsonify({'success': True, 'results': results})
-        except Exception as e:
-            logger.error(f"Error running legal simulation: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 500
-    
-    else:
-        return jsonify({'success': False, 'error': f"Module '{module}' not available"}), 404
+    except Exception as e:
+        logger.error(f"Error running sample {module} simulation: {e}")
+        flash(f'Error running sample simulation: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+
+@app.route('/results/<path:filename>')
+def download_result(filename):
+    """Download a result file."""
+    return send_from_directory('results', filename)
 
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     """Serve static files."""
-    return send_from_directory(app.static_folder, filename)
+    return send_from_directory('static', filename)
 
 
-def _load_sample_data():
-    """Load sample data for development."""
-    # Sample testimonies
-    testimonies.extend([
-        {
-            'name': 'John Doe',
-            'email': 'john@example.com',
-            'story': 'I experienced severe neurological symptoms after exposure...',
-            'symptoms': ['fatigue', 'brain fog', 'tremors'],
-            'date': '2023-05-15 10:30:45',
-            'id': 1
-        },
-        {
-            'name': 'Jane Smith',
-            'email': 'jane@example.com',
-            'story': 'My autonomic nervous system has been severely affected...',
-            'symptoms': ['pots', 'tachycardia', 'fatigue'],
-            'date': '2023-06-22 14:15:30',
-            'id': 2
-        }
-    ])
-    
-    # Sample uploaded genomes
-    uploaded_genomes.extend([
-        {
-            'filename': 'sample_genome_1.vcf',
-            'upload_date': '2023-04-10 09:45:22',
-            'size': 15000000,
-            'status': 'analyzed',
-            'id': 1
-        },
-        {
-            'filename': 'sample_genome_2.vcf',
-            'upload_date': '2023-07-05 16:20:18',
-            'size': 18000000,
-            'status': 'analyzed',
-            'id': 2
-        }
-    ])
-    
-    # Try to load simulation results from each module
-    if HAS_BIO_MODULE:
-        try:
-            simulator = NeuroimmuneDynamics()
-            simulation_results['biological'] = simulator.run_simulation(time_steps=100)
-        except Exception as e:
-            logger.error(f"Error loading sample biological data: {e}")
-    
-    if HAS_GENETIC_MODULE:
-        try:
-            scanner = GeneticRiskScanner()
-            simulation_results['genetic'] = {'sample': True}  # Placeholder
-        except Exception as e:
-            logger.error(f"Error loading sample genetic data: {e}")
-    
-    if HAS_INSTITUTIONAL_MODULE:
-        try:
-            model = InstitutionalFeedbackModel()
-            simulation_results['institutional'] = model.run_simulation(time_steps=50)
-        except Exception as e:
-            logger.error(f"Error loading sample institutional data: {e}")
-    
-    if HAS_LEGAL_MODULE:
-        try:
-            simulator = LegalPolicySimulator()
-            simulation_results['legal'] = simulator.run_simulation()
-        except Exception as e:
-            logger.error(f"Error loading sample legal data: {e}")
+@app.errorhandler(404)
+def page_not_found(e):
+    """Handle 404 errors."""
+    return render_template('404.html'), 404
 
 
-def create_app():
-    """Create and configure the Flask application."""
-    # Additional configuration could be done here
-    return app
+@app.errorhandler(500)
+def server_error(e):
+    """Handle 500 errors."""
+    logger.error(f"Server error: {e}")
+    return render_template('500.html'), 500
 
 
 if __name__ == '__main__':
-    # Create the app
-    app = create_app()
-    
-    # Load sample data for development
-    _load_sample_data()
+    # Create static directories if they don't exist
+    os.makedirs('static/img/biological', exist_ok=True)
+    os.makedirs('static/img/genetic', exist_ok=True)
+    os.makedirs('static/img/institutional', exist_ok=True)
+    os.makedirs('static/img/legal', exist_ok=True)
     
     # Run the app
-    port = int(os.environ.get('PORT', 3000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

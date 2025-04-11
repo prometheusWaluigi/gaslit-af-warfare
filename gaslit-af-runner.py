@@ -1,271 +1,322 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 GASLIT-AF WARSTACK Runner
 
-Command-line interface for running simulations and analyses across all layers
-of the GASLIT-AF WARSTACK project.
+This script provides a command-line interface for running the GASLIT-AF WARSTACK
+simulations and analyses.
 """
 
-import argparse
-import json
-import logging
 import os
 import sys
-from typing import Dict, Any, Optional, List
+import argparse
+import logging
+import json
+import datetime
+from pathlib import Path
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Add the project root to the Python path
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-# Import modules from each layer
+# Import modules
 try:
-    from src.biological_modeling.neuroimmune_simulator import NeuroimmuneDynamics, run_sample_simulation
-    BIOLOGICAL_MODELING_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"Biological modeling module not available: {e}")
-    BIOLOGICAL_MODELING_AVAILABLE = False
+    from src.biological_modeling import run_sample_simulation as run_biological
+except ImportError:
+    def run_biological(*args, **kwargs):
+        print("Biological modeling module not available")
+        return None
+
+try:
+    from src.genetic_risk import run_sample_analysis as run_genetic
+except ImportError:
+    def run_genetic(*args, **kwargs):
+        print("Genetic risk scanning module not available")
+        return None
+
+try:
+    from src.institutional_feedback import run_sample_simulation as run_institutional
+except ImportError:
+    def run_institutional(*args, **kwargs):
+        print("Institutional feedback modeling module not available")
+        return None
+
+try:
+    from src.legal_policy import run_sample_simulation as run_legal
+except ImportError:
+    def run_legal(*args, **kwargs):
+        print("Legal policy simulation module not available")
+        return None
 
 
-def setup_argparse() -> argparse.ArgumentParser:
-    """Set up command-line argument parser."""
+def setup_logging(verbose=False):
+    """Set up logging configuration."""
+    log_level = logging.DEBUG if verbose else logging.INFO
+    log_format = '%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)'
+    date_format = '%Y-%m-%d %H:%M:%S'
+    
+    logging.basicConfig(
+        level=log_level,
+        format=log_format,
+        datefmt=date_format,
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(f"logs/gaslit-af-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log")
+        ]
+    )
+
+
+def parse_args():
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="GASLIT-AF WARSTACK - Simulation and Analysis Tool",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        description="GASLIT-AF WARSTACK Runner"
     )
     
-    # General options
-    parser.add_argument('--output-dir', type=str, default='output',
-                        help='Directory to save output files')
-    parser.add_argument('--config', type=str,
-                        help='Path to configuration JSON file')
-    parser.add_argument('--verbose', action='store_true',
-                        help='Enable verbose logging')
+    parser.add_argument(
+        '--module', '-m',
+        choices=['biological', 'genetic', 'institutional', 'legal', 'all'],
+        default='all',
+        help="Module to run (default: all)"
+    )
     
-    # Create subparsers for different modules
-    subparsers = parser.add_subparsers(dest='module', help='Module to run')
+    parser.add_argument(
+        '--config', '-c',
+        type=str,
+        help="Path to configuration file"
+    )
     
-    # Biological modeling subparser
-    if BIOLOGICAL_MODELING_AVAILABLE:
-        bio_parser = subparsers.add_parser('bio', help='Biological modeling simulations')
-        bio_parser.add_argument('--time-steps', type=int, default=1000,
-                                help='Number of time steps for simulation')
-        bio_parser.add_argument('--dt', type=float, default=0.01,
-                                help='Time step size')
-        bio_parser.add_argument('--spike-toxicity', type=float, default=0.75,
-                                help='Spike protein toxicity factor (0-1)')
-        bio_parser.add_argument('--cerebellar-vulnerability', type=float, default=0.65,
-                                help='Cerebellar vulnerability factor (0-1)')
-        bio_parser.add_argument('--autonomic-resilience', type=float, default=0.3,
-                                help='Autonomic resilience factor (0-1)')
-        bio_parser.add_argument('--spatial-resolution', type=int, default=100,
-                                help='Spatial grid resolution')
-        bio_parser.add_argument('--plot-only', action='store_true',
-                                help='Only generate plots from existing results')
+    parser.add_argument(
+        '--output-dir', '-o',
+        type=str,
+        default='results',
+        help="Directory for output files (default: results)"
+    )
     
-    # Genetic risk scanning subparser (placeholder)
-    genetic_parser = subparsers.add_parser('genetic', help='Genetic risk scanning')
-    genetic_parser.add_argument('--vcf-file', type=str,
-                                help='Path to VCF file for genetic analysis')
-    genetic_parser.add_argument('--risk-factors', type=str, nargs='+',
-                                default=['TNXB', 'COMT', 'MTHFR', 'RCCX'],
-                                help='Genetic risk factors to analyze')
+    parser.add_argument(
+        '--visualize', '-v',
+        action='store_true',
+        help="Generate visualizations"
+    )
     
-    # Institutional feedback subparser (placeholder)
-    inst_parser = subparsers.add_parser('institutional', help='Institutional feedback modeling')
-    inst_parser.add_argument('--model-type', type=str, choices=['denial', 'capture', 'memetic'],
-                             default='denial', help='Type of institutional model to simulate')
+    parser.add_argument(
+        '--save-results', '-s',
+        action='store_true',
+        help="Save results to file"
+    )
     
-    # Legal & policy subparser (placeholder)
-    legal_parser = subparsers.add_parser('legal', help='Legal and policy simulation')
-    legal_parser.add_argument('--documents-dir', type=str,
-                              help='Directory containing legal documents to analyze')
+    parser.add_argument(
+        '--use-gpu',
+        action='store_true',
+        help="Use GPU acceleration if available"
+    )
     
-    # Frontend subparser (placeholder)
-    frontend_parser = subparsers.add_parser('frontend', help='Start the frontend server')
-    frontend_parser.add_argument('--port', type=int, default=3000,
-                                 help='Port for the frontend server')
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help="Enable verbose output"
+    )
     
-    return parser
+    parser.add_argument(
+        '--input-file', '-i',
+        type=str,
+        help="Input file for genetic analysis (VCF/FASTQ)"
+    )
+    
+    return parser.parse_args()
 
 
-def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Load configuration from a JSON file.
-    
-    Args:
-        config_path: Path to the configuration file
-        
-    Returns:
-        Configuration dictionary
-    """
-    config = {}
+def load_config(config_path=None):
+    """Load configuration from file or use defaults."""
+    default_config = {
+        'biological': {
+            'grid_size': 100,
+            'time_steps': 1000,
+            'dt': 0.01,
+            'noise_strength': 0.1,
+            'diffusion_constant': 1.0,
+            'reaction_rate': 1.0,
+            'coupling_strength': 0.5,
+            'initial_condition': 'random',
+            'boundary_condition': 'periodic',
+            'use_hardware_acceleration': False,
+            'output_dir': 'results/biological_modeling',
+            'random_seed': 42
+        },
+        'genetic': {
+            'output_dir': 'results/genetic_risk',
+            'risk_threshold': 0.7,
+            'high_risk_threshold': 0.9,
+            'use_hardware_acceleration': False,
+            'random_seed': 42
+        },
+        'institutional': {
+            'output_dir': 'results/institutional_feedback',
+            'simulation_steps': 100,
+            'network_size': 20,
+            'initial_evidence': 0.1,
+            'evidence_growth_rate': 0.01,
+            'denial_effectiveness': 0.8,
+            'capture_spread_rate': 0.05,
+            'random_seed': 42
+        },
+        'legal': {
+            'output_dir': 'results/legal_policy',
+            'simulation_steps': 100,
+            'initial_evidence_level': 0.1,
+            'evidence_growth_rate': 0.01,
+            'shield_decay_rate': 0.005,
+            'random_seed': 42,
+            'timeline_start': '2019-01-01',
+            'timeline_end': '2025-01-01'
+        }
+    }
     
     if config_path and os.path.exists(config_path):
         try:
             with open(config_path, 'r') as f:
-                config = json.load(f)
-            logger.info(f"Loaded configuration from {config_path}")
+                user_config = json.load(f)
+                
+            # Merge user config with defaults
+            for module, module_config in user_config.items():
+                if module in default_config:
+                    default_config[module].update(module_config)
+                else:
+                    default_config[module] = module_config
+                    
+            logging.info(f"Loaded configuration from {config_path}")
         except Exception as e:
-            logger.error(f"Error loading configuration: {e}")
+            logging.error(f"Error loading configuration: {e}")
     
-    return config
+    return default_config
 
 
-def run_biological_modeling(args: argparse.Namespace, config: Dict[str, Any]):
-    """
-    Run biological modeling simulations.
+def run_modules(args, config):
+    """Run the specified modules."""
+    results = {}
     
-    Args:
-        args: Command-line arguments
-        config: Configuration dictionary
-    """
-    if not BIOLOGICAL_MODELING_AVAILABLE:
-        logger.error("Biological modeling module not available")
+    # Create output directories
+    for module in config:
+        os.makedirs(config[module]['output_dir'], exist_ok=True)
+    
+    # Update GPU settings
+    if args.use_gpu:
+        for module in config:
+            config[module]['use_hardware_acceleration'] = True
+    
+    # Run biological modeling
+    if args.module in ['biological', 'all']:
+        logging.info("Running biological modeling simulation...")
+        try:
+            results['biological'] = run_biological(
+                config=config['biological'],
+                visualize=args.visualize,
+                save_results=args.save_results
+            )
+            logging.info("Biological modeling simulation completed")
+        except Exception as e:
+            logging.error(f"Error in biological modeling: {e}")
+    
+    # Run genetic risk scanning
+    if args.module in ['genetic', 'all']:
+        logging.info("Running genetic risk scanning...")
+        try:
+            results['genetic'] = run_genetic(
+                config=config['genetic'],
+                input_file=args.input_file,
+                visualize=args.visualize,
+                save_results=args.save_results
+            )
+            logging.info("Genetic risk scanning completed")
+        except Exception as e:
+            logging.error(f"Error in genetic risk scanning: {e}")
+    
+    # Run institutional feedback modeling
+    if args.module in ['institutional', 'all']:
+        logging.info("Running institutional feedback modeling...")
+        try:
+            results['institutional'] = run_institutional(
+                config=config['institutional'],
+                visualize=args.visualize,
+                save_results=args.save_results
+            )
+            logging.info("Institutional feedback modeling completed")
+        except Exception as e:
+            logging.error(f"Error in institutional feedback modeling: {e}")
+    
+    # Run legal policy simulation
+    if args.module in ['legal', 'all']:
+        logging.info("Running legal policy simulation...")
+        try:
+            results['legal'] = run_legal(
+                config=config['legal'],
+                visualize=args.visualize,
+                save_results=args.save_results
+            )
+            logging.info("Legal policy simulation completed")
+        except Exception as e:
+            logging.error(f"Error in legal policy simulation: {e}")
+    
+    return results
+
+
+def save_results(results, output_dir):
+    """Save results to file."""
+    if not results:
+        logging.warning("No results to save")
         return
     
-    # Create output directory
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+    output_file = os.path.join(output_dir, f"gaslit-af-results-{timestamp}.json")
     
-    # Prepare parameters
-    params = {
-        'spike_toxicity': args.spike_toxicity,
-        'cerebellar_vulnerability': args.cerebellar_vulnerability,
-        'autonomic_resilience': args.autonomic_resilience,
-        'time_steps': args.time_steps,
-        'spatial_resolution': args.spatial_resolution
-    }
-    
-    # Override with config file if provided
-    if 'biological_modeling' in config:
-        params.update(config.get('biological_modeling', {}).get('params', {}))
-    
-    # Create simulator
-    simulator = NeuroimmuneDynamics({'params': params})
-    
-    if not args.plot_only:
-        # Run simulation
-        logger.info("Running neuroimmune dynamics simulation...")
-        results = simulator.run_simulation(time_steps=args.time_steps, dt=args.dt)
+    # Convert non-serializable objects to strings
+    serializable_results = {}
+    for module, module_results in results.items():
+        if module_results is None:
+            continue
         
-        # Save results
-        results_path = os.path.join(args.output_dir, 'neuroimmune_results.json')
-        simulator.save_results(results, results_path)
-    else:
-        # Load existing results
-        results_path = os.path.join(args.output_dir, 'neuroimmune_results.json')
-        if not os.path.exists(results_path):
-            logger.error(f"Results file not found: {results_path}")
-            return
-        
-        with open(results_path, 'r') as f:
-            results = json.load(f)
-        logger.info(f"Loaded existing results from {results_path}")
+        if isinstance(module_results, dict):
+            serializable_results[module] = {}
+            for key, value in module_results.items():
+                try:
+                    # Test if value is JSON serializable
+                    json.dumps(value)
+                    serializable_results[module][key] = value
+                except (TypeError, OverflowError):
+                    # If not, convert to string
+                    serializable_results[module][key] = str(value)
+        else:
+            serializable_results[module] = str(module_results)
     
-    # Generate plots
-    logger.info("Generating phase portrait...")
-    portrait_path = os.path.join(args.output_dir, 'phase_portrait.png')
-    simulator.plot_phase_portrait(save_path=portrait_path)
-    
-    logger.info(f"Biological modeling completed. Results saved to {args.output_dir}")
-
-
-def run_genetic_risk_scanning(args: argparse.Namespace, config: Dict[str, Any]):
-    """
-    Run genetic risk scanning (placeholder).
-    
-    Args:
-        args: Command-line arguments
-        config: Configuration dictionary
-    """
-    logger.info("Genetic risk scanning module not yet implemented")
-    logger.info(f"Would analyze VCF file: {args.vcf_file}")
-    logger.info(f"Would analyze risk factors: {args.risk_factors}")
-
-
-def run_institutional_feedback(args: argparse.Namespace, config: Dict[str, Any]):
-    """
-    Run institutional feedback modeling (placeholder).
-    
-    Args:
-        args: Command-line arguments
-        config: Configuration dictionary
-    """
-    logger.info("Institutional feedback modeling module not yet implemented")
-    logger.info(f"Would run model type: {args.model_type}")
-
-
-def run_legal_policy(args: argparse.Namespace, config: Dict[str, Any]):
-    """
-    Run legal and policy simulation (placeholder).
-    
-    Args:
-        args: Command-line arguments
-        config: Configuration dictionary
-    """
-    logger.info("Legal and policy simulation module not yet implemented")
-    logger.info(f"Would analyze documents in: {args.documents_dir}")
-
-
-def run_frontend(args: argparse.Namespace, config: Dict[str, Any]):
-    """
-    Start the frontend server (placeholder).
-    
-    Args:
-        args: Command-line arguments
-        config: Configuration dictionary
-    """
-    logger.info("Frontend module not yet implemented")
-    logger.info(f"Would start server on port: {args.port}")
+    try:
+        with open(output_file, 'w') as f:
+            json.dump(serializable_results, f, indent=2)
+        logging.info(f"Results saved to {output_file}")
+    except Exception as e:
+        logging.error(f"Error saving results: {e}")
 
 
 def main():
-    """Main entry point for the CLI."""
-    parser = setup_argparse()
-    args = parser.parse_args()
+    """Main entry point."""
+    # Parse command line arguments
+    args = parse_args()
     
-    # Set logging level
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    # Create logs directory
+    os.makedirs('logs', exist_ok=True)
+    
+    # Set up logging
+    setup_logging(args.verbose)
     
     # Load configuration
     config = load_config(args.config)
     
-    # Create output directory
-    if args.output_dir:
-        os.makedirs(args.output_dir, exist_ok=True)
+    # Run modules
+    results = run_modules(args, config)
     
-    # Run the selected module
-    if args.module == 'bio':
-        run_biological_modeling(args, config)
-    elif args.module == 'genetic':
-        run_genetic_risk_scanning(args, config)
-    elif args.module == 'institutional':
-        run_institutional_feedback(args, config)
-    elif args.module == 'legal':
-        run_legal_policy(args, config)
-    elif args.module == 'frontend':
-        run_frontend(args, config)
-    else:
-        # If no module specified, run a sample simulation
-        if BIOLOGICAL_MODELING_AVAILABLE:
-            logger.info("Running sample biological simulation...")
-            run_sample_simulation()
-        else:
-            parser.print_help()
+    # Save results
+    if args.save_results:
+        save_results(results, args.output_dir)
     
-    logger.info("GASLIT-AF WARSTACK execution completed")
+    return 0
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        logger.info("Execution interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Error during execution: {e}", exc_info=True)
-        sys.exit(1)
+    sys.exit(main())

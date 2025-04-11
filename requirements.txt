@@ -1,48 +1,46 @@
+# GASLIT-AF WARSTACK - Requirements
+
 # Core dependencies
 numpy>=1.20.0
 scipy>=1.7.0
 matplotlib>=3.4.0
 pandas>=1.3.0
+networkx>=2.6.0
+scikit-learn>=0.24.0
 
-# Biological modeling
-torch>=1.9.0
-intel-extension-for-pytorch>=1.12.0  # Optional, for Intel A770 acceleration
-dpctl>=0.14.0  # Optional, for Intel A770 acceleration
+# Web framework
+Flask>=2.0.0
+Werkzeug>=2.0.0
+Jinja2>=3.0.0
+itsdangerous>=2.0.0
+click>=8.0.0
 
-# Genetic risk scanning
-scikit-allel>=1.3.5
+# Data processing
+PyPDF2>=2.0.0
+spacy>=3.0.0
+scikit-allel>=1.3.0
 biopython>=1.79
 
-# Institutional feedback modeling
-networkx>=2.6.0
-graphviz>=0.17.0
-
-# Legal & policy simulation
-spacy>=3.2.0
-pypdf2>=2.0.0
-langchain>=0.0.139
-transformers>=4.18.0
-
-# Frontend
-flask>=2.0.0
-flask-wtf>=1.0.0
-flask-sqlalchemy>=2.5.0
-flask-migrate>=3.1.0
-flask-login>=0.6.0
-flask-cors>=3.0.10
-jinja2>=3.0.0
-werkzeug>=2.0.0
+# Hardware acceleration (optional)
+torch>=1.9.0; platform_system != "Darwin" or platform_machine != "arm64"
+# For Intel Arc A770 with oneAPI
+# intel-extension-for-pytorch>=1.12.0
 
 # Testing
-pytest>=7.0.0
-pytest-cov>=3.0.0
-pytest-mock>=3.7.0
+pytest>=6.2.5
+pytest-cov>=2.12.0
+pytest-mock>=3.6.0
 pytest-html>=3.1.0
-pytest-json-report>=1.5.0
+pytest-json-report>=1.4.0
 
-# Development
-black>=22.3.0
-flake8>=4.0.0
-isort>=5.10.0
-mypy>=0.950
-pylint>=2.13.0
+# Documentation
+Sphinx>=4.0.0
+sphinx-rtd-theme>=1.0.0
+nbsphinx>=0.8.0
+ipython>=7.0.0
+
+# Development tools
+black>=21.5b0
+flake8>=3.9.0
+isort>=5.9.0
+mypy>=0.900

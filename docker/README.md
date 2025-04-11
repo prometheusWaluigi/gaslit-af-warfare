@@ -4,66 +4,77 @@ This directory contains Docker-related configuration files for the GASLIT-AF WAR
 
 ## Directory Structure
 
-- **nginx/**: Nginx web server configuration
-  - `nginx.conf`: Main Nginx configuration file
-  
-- **postgres/**: PostgreSQL database configuration
+- `nginx/`: NGINX web server configuration
+  - `nginx.conf`: NGINX configuration file for serving the application
+- `postgres/`: PostgreSQL database configuration
   - `init.sql`: Database initialization script
 
 ## Usage
 
-The Docker setup is configured using Docker Compose. The main `docker-compose.yml` file is located in the project root directory.
-
-### Running with Docker Compose
-
-To start the application with Docker Compose:
+The Docker setup is configured using Docker Compose. To start the application with all its services, run:
 
 ```bash
-docker-compose up -d
+docker-compose up --build
 ```
 
 This will start the following services:
 
-- **app**: The main application container running the Flask application
-- **db**: (Optional) PostgreSQL database container
-- **nginx**: (Optional) Nginx web server container for production deployments
+1. **app**: The main Flask application
+2. **db**: PostgreSQL database
+3. **nginx**: NGINX web server for serving the application
+4. **jupyter**: Jupyter Notebook for data analysis (optional)
 
-### Development vs. Production
+## Configuration
 
-For development, you can use just the app service:
+### NGINX
 
-```bash
-docker-compose up app
-```
+The NGINX configuration (`nginx/nginx.conf`) sets up a reverse proxy to the Flask application and handles static file serving. It also includes:
 
-For production, you should use all services and enable the Nginx configuration:
+- Gzip compression for better performance
+- Cache control for static assets
+- Health check endpoint
+- Increased upload size limit for genome files
 
-1. Uncomment the database service in `docker-compose.yml`
-2. Add the Nginx service to `docker-compose.yml`:
+### PostgreSQL
 
-```yaml
-nginx:
-  image: nginx:alpine
-  container_name: gaslit-af-nginx
-  ports:
-    - "80:80"
-  volumes:
-    - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
-    - ./src/frontend/static:/app/src/frontend/static
-  depends_on:
-    - app
-  restart: unless-stopped
-```
+The PostgreSQL initialization script (`postgres/init.sql`) sets up the database schema for the application. It creates:
+
+- Tables for testimonies, genome uploads, analysis results, and users
+- Indexes for better query performance
+- A default admin user
+- Triggers for automatic timestamp updates
+
+## Environment Variables
+
+The following environment variables can be configured in the `docker-compose.yml` file:
+
+- `FLASK_ENV`: Flask environment (development/production)
+- `SECRET_KEY`: Secret key for Flask sessions
+- `DATABASE_URL`: PostgreSQL connection string
+- `POSTGRES_USER`: PostgreSQL username
+- `POSTGRES_PASSWORD`: PostgreSQL password
+- `POSTGRES_DB`: PostgreSQL database name
+
+## Volumes
+
+The Docker Compose setup uses the following volumes:
+
+- `postgres_data`: Persistent storage for PostgreSQL data
+- `./results:/app/results`: Shared volume for simulation results
+- `./logs:/app/logs`: Shared volume for application logs
+- `./uploads:/app/uploads`: Shared volume for user uploads
+- `./data:/app/data`: Shared volume for application data
+- `./static:/app/static`: Shared volume for static files
+
+## Networks
+
+All services are connected to the `gaslit-network` bridge network for internal communication.
 
 ## Customization
 
-### Database Configuration
+To customize the Docker setup:
 
-You can customize the database configuration by modifying:
-
-- The `init.sql` script in the `postgres` directory
-- The environment variables in the `docker-compose.yml` file
-
-### Nginx Configuration
-
-You can customize the Nginx configuration by modifying the `nginx.conf` file in the `nginx` directory.
+1. Modify the `Dockerfile` to change the application container
+2. Update `docker-compose.yml` to add or remove services
+3. Adjust the NGINX configuration in `nginx/nginx.conf`
+4. Modify the database schema in `postgres/init.sql`

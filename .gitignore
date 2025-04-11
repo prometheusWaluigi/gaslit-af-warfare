@@ -1,3 +1,5 @@
+# GASLIT-AF WARSTACK - .gitignore
+
 # Python
 __pycache__/
 *.py[cod]
@@ -21,49 +23,53 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual Environment
+# Virtual environments
 venv/
 env/
 ENV/
+.env
+.venv
+env.bak/
+venv.bak/
 
 # Testing
 .coverage
 htmlcov/
 .pytest_cache/
+coverage_html/
 .tox/
-.nox/
+nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
-test_report.json
-test_report.html
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# IDE
+# IDE files
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-
-# OS specific
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
 
 # Project specific
-data/*
-!data/.gitkeep
-results/*
-!results/.gitkeep
-logs/*
-!logs/.gitkeep
+results/
+logs/
+uploads/
+data/testimonies/
+data/genomes/
+static/img/biological/
+static/img/genetic/
+static/img/institutional/
+static/img/legal/
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+.cache/
 
 # Environment variables
 .env
@@ -74,8 +80,33 @@ logs/*
 
 # Docker
 .docker/
+docker-compose.override.yml
 
-# Temporary files
-*.tmp
-*.bak
-*.log
+# Documentation
+docs/_build/
+docs/api/
+
+# Compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.a
+*.so
+*.dylib
+
+# Package files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Database
+*.db
+*.sqlite
+*.sqlite3

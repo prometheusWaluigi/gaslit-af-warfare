@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Institutional Feedback Model for GASLIT-AF WARSTACK
 
-This module implements institutional feedback modeling to build dynamic denial-injury-denial loops,
-regulatory capture graphs, and memetic immunosuppression nets.
+This module builds dynamic denial-injury-denial loops, regulatory capture graphs,
+and memetic immunosuppression nets to model institutional feedback mechanisms.
 """
 
 import os
+import sys
 import json
-import logging
+import time
+import random
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Dict, List, Tuple, Optional, Union, Any
+import matplotlib.cm as cm
+from matplotlib.colors import Normalize
+from collections import defaultdict
+import logging
 
 # Optional imports for network analysis
 try:
@@ -20,482 +24,717 @@ try:
     HAS_NETWORKX = True
 except ImportError:
     HAS_NETWORKX = False
-    logging.warning("NetworkX not available. Graph analysis will be limited.")
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 
 class InstitutionalFeedbackModel:
     """
-    Models institutional feedback loops and systemic denial mechanisms.
+    Models institutional feedback mechanisms related to GASLIT-AF syndrome.
+    
+    This class implements methods for simulating denial-injury-denial loops,
+    regulatory capture, and memetic immunosuppression in institutional responses
+    to emerging health crises.
     """
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    # Key institutional actors and their initial properties
+    INSTITUTIONAL_ACTORS = {
+        'CDC': {'type': 'regulatory', 'influence': 0.9, 'denial_bias': 0.7, 'capture_factor': 0.6},
+        'FDA': {'type': 'regulatory', 'influence': 0.85, 'denial_bias': 0.65, 'capture_factor': 0.7},
+        'NIH': {'type': 'research', 'influence': 0.8, 'denial_bias': 0.5, 'capture_factor': 0.5},
+        'WHO': {'type': 'international', 'influence': 0.75, 'denial_bias': 0.6, 'capture_factor': 0.4},
+        'BigPharma': {'type': 'industry', 'influence': 0.9, 'denial_bias': 0.9, 'capture_factor': 0.1},
+        'Academia': {'type': 'research', 'influence': 0.7, 'denial_bias': 0.4, 'capture_factor': 0.6},
+        'Media': {'type': 'information', 'influence': 0.8, 'denial_bias': 0.7, 'capture_factor': 0.5},
+        'MedicalAssociations': {'type': 'professional', 'influence': 0.75, 'denial_bias': 0.6, 'capture_factor': 0.6},
+        'PatientGroups': {'type': 'advocacy', 'influence': 0.4, 'denial_bias': 0.2, 'capture_factor': 0.8},
+        'IndependentResearchers': {'type': 'research', 'influence': 0.3, 'denial_bias': 0.3, 'capture_factor': 0.9}
+    }
+    
+    # Initial connection strengths between actors
+    INITIAL_CONNECTIONS = [
+        ('CDC', 'FDA', 0.9),
+        ('CDC', 'NIH', 0.8),
+        ('CDC', 'WHO', 0.7),
+        ('CDC', 'BigPharma', 0.6),
+        ('FDA', 'BigPharma', 0.8),
+        ('NIH', 'Academia', 0.7),
+        ('NIH', 'BigPharma', 0.6),
+        ('WHO', 'CDC', 0.6),
+        ('WHO', 'BigPharma', 0.5),
+        ('BigPharma', 'Media', 0.7),
+        ('BigPharma', 'MedicalAssociations', 0.6),
+        ('Academia', 'Media', 0.5),
+        ('Academia', 'IndependentResearchers', 0.4),
+        ('Media', 'PatientGroups', 0.5),
+        ('MedicalAssociations', 'PatientGroups', 0.6),
+        ('PatientGroups', 'IndependentResearchers', 0.5)
+    ]
+    
+    def __init__(self, config=None):
         """
         Initialize the institutional feedback model.
         
         Args:
-            config: Configuration dictionary with model parameters
+            config (dict, optional): Configuration parameters for the model.
         """
-        self.config = config or {}
-        
-        # Default parameters
-        self.params = {
-            'institutions': ['CDC', 'FDA', 'Media', 'Academia', 'Industry'],
-            'initial_legitimacy': 0.8,  # Initial legitimacy score (0-1)
-            'denial_strength': 0.7,  # Strength of denial mechanisms (0-1)
-            'capture_factor': 0.6,  # Regulatory capture factor (0-1)
-            'memetic_spread_rate': 0.3,  # Rate of memetic spread (0-1)
-            'time_steps': 100,  # Number of time steps for simulation
+        # Default configuration
+        self.config = {
+            'output_dir': 'results/institutional_feedback',
+            'simulation_steps': 100,
+            'network_size': 10,  # Number of institutional actors
+            'initial_evidence': 0.1,  # Initial evidence of harm
+            'evidence_growth_rate': 0.02,  # Rate at which evidence accumulates
+            'denial_effectiveness': 0.8,  # How effective denial is at suppressing evidence
+            'capture_spread_rate': 0.05,  # Rate at which regulatory capture spreads
+            'random_seed': 42,
+            'use_custom_actors': False,
+            'custom_actors_file': None
         }
         
-        # Update with user-provided parameters
-        self.params.update(self.config.get('params', {}))
+        # Update with user configuration if provided
+        if config is not None:
+            self.config.update(config)
         
-        # Initialize state variables
-        self.reset_state()
+        # Set random seed for reproducibility
+        np.random.seed(self.config['random_seed'])
+        random.seed(self.config['random_seed'])
         
-        # Check for required dependencies
-        self._check_dependencies()
-    
-    def _check_dependencies(self):
-        """Check if required dependencies are available."""
-        if not HAS_NETWORKX:
-            logger.warning("NetworkX is required for graph-based analysis")
-    
-    def reset_state(self):
-        """Reset the simulation state."""
+        # Create output directory if it doesn't exist
+        os.makedirs(self.config['output_dir'], exist_ok=True)
+        
+        # Set up logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(os.path.join(self.config['output_dir'], 'institutional_model.log')),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger('InstitutionalFeedbackModel')
+        
+        # Load custom actors if specified
+        if self.config['use_custom_actors'] and self.config['custom_actors_file'] and os.path.exists(self.config['custom_actors_file']):
+            self._load_custom_actors()
+        
+        # Initialize model state
         self.time = 0
         self.iteration = 0
+        self.evidence_level = 0.1  # Starting evidence level
+        self.denial_level = 0.9  # Starting denial level
+        self.capture_level = 0.5  # Starting regulatory capture level
+        self.entropy = 0.1  # System entropy (measure of disorder/instability)
+        self.narrative_stability = 0.9  # Stability of the institutional narrative
         
-        # Initialize institutions
-        self.institutions = self.params['institutions']
-        n_inst = len(self.institutions)
+        # Initialize network
+        self.network = self._initialize_network()
         
-        # Initialize state variables
-        self.legitimacy = np.ones(n_inst) * self.params['initial_legitimacy']
-        self.denial = np.zeros(n_inst)
-        self.injury = np.zeros(n_inst)
-        
-        # Initialize network structure if NetworkX is available
-        if HAS_NETWORKX:
-            self.network = self._initialize_network()
-        
-        # History for tracking system states
+        # Initialize history tracking
         self.history = {
-            'time': [],
-            'legitimacy': [],
-            'denial': [],
-            'injury': [],
-            'entropy': []
+            'time': [0],
+            'evidence_level': [self.evidence_level],
+            'denial_level': [self.denial_level],
+            'capture_level': [self.capture_level],
+            'entropy': [self.entropy],
+            'narrative_stability': [self.narrative_stability],
+            'system_state': ['stable']
         }
     
-    def _initialize_network(self) -> nx.DiGraph:
-        """
-        Initialize the institutional network structure.
+    def _load_custom_actors(self):
+        """Load custom institutional actors from a JSON file."""
+        try:
+            with open(self.config['custom_actors_file'], 'r') as f:
+                custom_actors = json.load(f)
+            
+            # Validate and replace default actors
+            if isinstance(custom_actors, dict) and 'actors' in custom_actors and 'connections' in custom_actors:
+                self.INSTITUTIONAL_ACTORS = custom_actors['actors']
+                self.INITIAL_CONNECTIONS = custom_actors['connections']
+                
+                self.logger.info(f"Loaded custom institutional actors from {self.config['custom_actors_file']}")
         
-        Returns:
-            Directed graph representing institutional relationships
-        """
+        except Exception as e:
+            self.logger.error(f"Error loading custom institutional actors: {e}")
+    
+    def _initialize_network(self):
+        """Initialize the institutional network."""
+        if not HAS_NETWORKX:
+            self.logger.warning("NetworkX is required for network visualization but not installed.")
+            return None
+        
+        # Create a directed graph
         G = nx.DiGraph()
         
-        # Add nodes (institutions)
-        for i, inst in enumerate(self.institutions):
-            G.add_node(inst, 
-                       legitimacy=self.legitimacy[i],
-                       denial=self.denial[i],
-                       injury=self.injury[i])
+        # Add nodes (institutional actors)
+        for actor, properties in self.INSTITUTIONAL_ACTORS.items():
+            G.add_node(actor, **properties)
         
-        # Add edges (relationships between institutions)
-        # This is a simplified model - real relationships would be more complex
-        
-        # CDC relationships
-        G.add_edge('CDC', 'Media', weight=0.8, type='information')
-        G.add_edge('CDC', 'Academia', weight=0.6, type='funding')
-        G.add_edge('Industry', 'CDC', weight=0.7, type='influence')
-        
-        # FDA relationships
-        G.add_edge('FDA', 'Media', weight=0.7, type='information')
-        G.add_edge('Industry', 'FDA', weight=0.9, type='influence')
-        
-        # Media relationships
-        G.add_edge('Media', 'Academia', weight=0.5, type='amplification')
-        G.add_edge('Media', 'Industry', weight=0.3, type='scrutiny')
-        
-        # Academia relationships
-        G.add_edge('Academia', 'CDC', weight=0.6, type='expertise')
-        G.add_edge('Academia', 'FDA', weight=0.5, type='expertise')
-        G.add_edge('Industry', 'Academia', weight=0.8, type='funding')
+        # Add edges (connections between actors)
+        for source, target, weight in self.INITIAL_CONNECTIONS:
+            G.add_edge(source, target, weight=weight)
         
         return G
     
-    def denial_injury_step(self, dt: float = 0.1):
+    def build_institutional_network(self):
+        """Build the institutional network with current properties."""
+        if not HAS_NETWORKX:
+            self.logger.warning("NetworkX is required for network visualization but not installed.")
+            return None
+        
+        # Create a new directed graph
+        G = nx.DiGraph()
+        
+        # Add nodes (institutional actors)
+        for actor, properties in self.INSTITUTIONAL_ACTORS.items():
+            # Add dynamic properties based on current state
+            dynamic_props = properties.copy()
+            dynamic_props['current_denial'] = properties['denial_bias'] * self.denial_level
+            dynamic_props['current_capture'] = (1 - properties['capture_factor']) * self.capture_level
+            
+            G.add_node(actor, **dynamic_props)
+        
+        # Add edges (connections between actors)
+        for source, target, base_weight in self.INITIAL_CONNECTIONS:
+            # Modify connection strength based on current state
+            source_denial = G.nodes[source]['current_denial']
+            target_denial = G.nodes[target]['current_denial']
+            
+            # Stronger connections between actors with similar denial levels
+            denial_similarity = 1 - abs(source_denial - target_denial)
+            
+            # Adjust weight based on denial similarity and system entropy
+            adjusted_weight = base_weight * denial_similarity * (1 - self.entropy)
+            
+            G.add_edge(source, target, weight=adjusted_weight)
+        
+        self.network = G
+        return G
+    
+    def calculate_denial_loop_strength(self):
         """
-        Perform a single time step of the denial-injury-denial loop.
+        Calculate the strength of denial-injury-denial loops in the network.
         
-        Args:
-            dt: Time step size
+        Returns:
+            float: Denial loop strength (0-1).
         """
-        n_inst = len(self.institutions)
+        if not HAS_NETWORKX or self.network is None:
+            return 0.5  # Default value if network analysis is not available
         
-        # Parameters
-        denial_strength = self.params['denial_strength']
+        # Look for cycles in the network
+        try:
+            cycles = list(nx.simple_cycles(self.network))
+            
+            if not cycles:
+                return 0.3  # Low loop strength if no cycles found
+            
+            # Calculate the strength of each cycle based on denial levels and edge weights
+            cycle_strengths = []
+            for cycle in cycles:
+                if len(cycle) < 2:
+                    continue
+                
+                # Calculate the product of edge weights and node denial levels around the cycle
+                strength = 1.0
+                for i in range(len(cycle)):
+                    source = cycle[i]
+                    target = cycle[(i + 1) % len(cycle)]
+                    
+                    if self.network.has_edge(source, target):
+                        edge_weight = self.network[source][target]['weight']
+                        source_denial = self.network.nodes[source]['current_denial']
+                        
+                        strength *= edge_weight * source_denial
+                
+                # Normalize by cycle length
+                strength = strength ** (1.0 / len(cycle))
+                cycle_strengths.append(strength)
+            
+            # Overall denial loop strength is the maximum cycle strength
+            return max(cycle_strengths) if cycle_strengths else 0.3
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating denial loop strength: {e}")
+            return 0.5
+    
+    def calculate_regulatory_capture(self):
+        """
+        Calculate the level of regulatory capture in the network.
         
-        # Calculate injury based on current denial levels
-        # Higher denial leads to more injury over time
-        injury_rate = denial_strength * self.denial * (1 - self.injury)
+        Returns:
+            float: Regulatory capture level (0-1).
+        """
+        if not HAS_NETWORKX or self.network is None:
+            return self.capture_level  # Use current value if network analysis is not available
         
-        # Calculate denial response to injury
-        # More injury leads to stronger denial
-        denial_rate = self.injury * (1 - self.denial) - 0.1 * self.denial
+        # Identify regulatory actors
+        regulatory_actors = [actor for actor, data in self.network.nodes(data=True) 
+                            if data.get('type') == 'regulatory']
         
-        # Calculate legitimacy decay based on denial and injury
-        # Both denial and injury reduce legitimacy
-        legitimacy_rate = -0.1 * (self.denial + self.injury) * self.legitimacy
+        if not regulatory_actors:
+            return 0.5  # Default value if no regulatory actors found
         
-        # Update state variables
-        self.injury += dt * injury_rate
-        self.denial += dt * denial_rate
-        self.legitimacy += dt * legitimacy_rate
+        # Calculate influence of industry on regulatory actors
+        industry_actors = [actor for actor, data in self.network.nodes(data=True) 
+                          if data.get('type') == 'industry']
         
-        # Ensure values stay in valid range
-        self.injury = np.clip(self.injury, 0, 1)
-        self.denial = np.clip(self.denial, 0, 1)
-        self.legitimacy = np.clip(self.legitimacy, 0, 1)
+        if not industry_actors:
+            return 0.3  # Lower capture if no industry actors found
         
-        # Update network if available
-        if HAS_NETWORKX:
-            for i, inst in enumerate(self.institutions):
-                self.network.nodes[inst]['legitimacy'] = self.legitimacy[i]
-                self.network.nodes[inst]['denial'] = self.denial[i]
-                self.network.nodes[inst]['injury'] = self.injury[i]
+        # Calculate weighted influence
+        total_influence = 0
+        for reg_actor in regulatory_actors:
+            for ind_actor in industry_actors:
+                # Check for direct influence (edge from industry to regulatory)
+                if self.network.has_edge(ind_actor, reg_actor):
+                    weight = self.network[ind_actor][reg_actor]['weight']
+                    ind_influence = self.network.nodes[ind_actor]['influence']
+                    total_influence += weight * ind_influence
         
-        # Calculate system entropy (measure of disorder/legitimacy loss)
-        entropy = -np.sum(self.legitimacy * np.log2(self.legitimacy + 1e-10))
+        # Normalize by the number of possible connections
+        max_possible_influence = len(regulatory_actors) * len(industry_actors)
+        if max_possible_influence > 0:
+            capture_level = total_influence / max_possible_influence
+        else:
+            capture_level = 0.5
+        
+        # Blend with current capture level for smoother transitions
+        return 0.7 * capture_level + 0.3 * self.capture_level
+    
+    def calculate_memetic_immunosuppression(self):
+        """
+        Calculate the level of memetic immunosuppression in the network.
+        
+        Returns:
+            float: Memetic immunosuppression level (0-1).
+        """
+        if not HAS_NETWORKX or self.network is None:
+            return 0.5  # Default value if network analysis is not available
+        
+        # Identify information dissemination actors
+        info_actors = [actor for actor, data in self.network.nodes(data=True) 
+                      if data.get('type') in ['information', 'media']]
+        
+        if not info_actors:
+            return 0.4  # Default value if no information actors found
+        
+        # Calculate the weighted average of denial bias in information actors
+        total_weighted_denial = 0
+        total_influence = 0
+        
+        for actor in info_actors:
+            denial_bias = self.network.nodes[actor]['denial_bias']
+            influence = self.network.nodes[actor]['influence']
+            
+            total_weighted_denial += denial_bias * influence
+            total_influence += influence
+        
+        if total_influence > 0:
+            avg_info_denial = total_weighted_denial / total_influence
+        else:
+            avg_info_denial = 0.5
+        
+        # Calculate how much the information actors are connected to the rest of the network
+        connectivity = 0
+        for actor in info_actors:
+            # Count incoming and outgoing connections
+            in_edges = self.network.in_edges(actor, data=True)
+            out_edges = self.network.out_edges(actor, data=True)
+            
+            # Sum the weights
+            in_weight = sum(data['weight'] for _, _, data in in_edges)
+            out_weight = sum(data['weight'] for _, _, data in out_edges)
+            
+            connectivity += (in_weight + out_weight) / 2
+        
+        # Normalize connectivity
+        max_possible_connectivity = len(info_actors) * (len(self.network) - 1)
+        if max_possible_connectivity > 0:
+            norm_connectivity = connectivity / max_possible_connectivity
+        else:
+            norm_connectivity = 0.5
+        
+        # Memetic immunosuppression is a function of information actor denial and connectivity
+        return (avg_info_denial * 0.7 + norm_connectivity * 0.3)
+    
+    def update_evidence_level(self):
+        """Update the evidence level based on current system state."""
+        # Base evidence growth
+        evidence_growth = self.config['evidence_growth_rate']
+        
+        # Evidence is suppressed by denial and memetic immunosuppression
+        memetic_immunosuppression = self.calculate_memetic_immunosuppression()
+        suppression_factor = self.denial_level * self.config['denial_effectiveness'] * memetic_immunosuppression
+        
+        # Calculate net evidence change
+        net_change = evidence_growth * (1 - suppression_factor)
+        
+        # Update evidence level, ensuring it stays in [0, 1]
+        self.evidence_level = min(1.0, max(0.0, self.evidence_level + net_change))
+        
+        return self.evidence_level
+    
+    def update_denial_level(self):
+        """Update the denial level based on current system state."""
+        # Denial decreases as evidence increases, but is reinforced by denial loops
+        denial_loop_strength = self.calculate_denial_loop_strength()
+        
+        # Calculate pressure on denial from evidence
+        evidence_pressure = self.evidence_level * (1 - denial_loop_strength)
+        
+        # Calculate reinforcement from institutional loops
+        loop_reinforcement = denial_loop_strength * 0.1
+        
+        # Net change in denial
+        net_change = loop_reinforcement - evidence_pressure
+        
+        # Update denial level, ensuring it stays in [0, 1]
+        self.denial_level = min(1.0, max(0.0, self.denial_level + net_change))
+        
+        return self.denial_level
+    
+    def update_capture_level(self):
+        """Update the regulatory capture level based on current system state."""
+        # Calculate current regulatory capture
+        current_capture = self.calculate_regulatory_capture()
+        
+        # Capture tends to increase over time unless actively countered
+        capture_growth = self.config['capture_spread_rate'] * (1 - self.entropy)
+        
+        # Blend current calculation with growth trend
+        self.capture_level = 0.9 * current_capture + 0.1 * (current_capture + capture_growth)
+        self.capture_level = min(1.0, max(0.0, self.capture_level))
+        
+        return self.capture_level
+    
+    def update_entropy(self):
+        """Update the system entropy based on current state."""
+        # Entropy increases with evidence and decreases with narrative stability
+        evidence_factor = self.evidence_level * 0.5
+        stability_factor = self.narrative_stability * 0.5
+        
+        # Target entropy based on current factors
+        target_entropy = evidence_factor * (1 - stability_factor)
+        
+        # Gradually move toward target entropy
+        self.entropy = 0.9 * self.entropy + 0.1 * target_entropy
+        self.entropy = min(1.0, max(0.0, self.entropy))
+        
+        return self.entropy
+    
+    def update_narrative_stability(self):
+        """Update the narrative stability based on current state."""
+        # Narrative stability decreases with evidence and entropy
+        evidence_pressure = self.evidence_level * 0.3
+        entropy_pressure = self.entropy * 0.3
+        
+        # Denial and capture help maintain narrative stability
+        denial_support = self.denial_level * 0.2
+        capture_support = self.capture_level * 0.2
+        
+        # Calculate net change
+        net_change = denial_support + capture_support - evidence_pressure - entropy_pressure
+        
+        # Update narrative stability, ensuring it stays in [0, 1]
+        self.narrative_stability = min(1.0, max(0.0, self.narrative_stability + net_change))
+        
+        return self.narrative_stability
+    
+    def determine_system_state(self):
+        """
+        Determine the current state of the system based on key metrics.
+        
+        Returns:
+            str: System state description.
+        """
+        if self.entropy < 0.3 and self.narrative_stability > 0.7:
+            return "stable"  # System is stable, denial is effective
+        elif self.entropy >= 0.3 and self.entropy < 0.6 and self.narrative_stability > 0.4:
+            return "questioning"  # Some questions are being raised
+        elif self.entropy >= 0.6 and self.narrative_stability > 0.3:
+            return "contested"  # Narrative is being actively contested
+        elif self.narrative_stability <= 0.3:
+            return "collapsing"  # Institutional narrative is collapsing
+        else:
+            return "transitioning"  # System is in transition
+    
+    def step(self):
+        """
+        Advance the simulation by one time step.
+        
+        Returns:
+            dict: Updated system state.
+        """
+        # Update the network
+        self.build_institutional_network()
+        
+        # Update system variables
+        self.update_evidence_level()
+        self.update_denial_level()
+        self.update_capture_level()
+        self.update_entropy()
+        self.update_narrative_stability()
+        
+        # Determine system state
+        system_state = self.determine_system_state()
         
         # Update time and iteration
-        self.time += dt
+        self.time += 1
         self.iteration += 1
         
         # Record history
         self.history['time'].append(self.time)
-        self.history['legitimacy'].append(self.legitimacy.copy())
-        self.history['denial'].append(self.denial.copy())
-        self.history['injury'].append(self.injury.copy())
-        self.history['entropy'].append(entropy)
+        self.history['evidence_level'].append(self.evidence_level)
+        self.history['denial_level'].append(self.denial_level)
+        self.history['capture_level'].append(self.capture_level)
+        self.history['entropy'].append(self.entropy)
+        self.history['narrative_stability'].append(self.narrative_stability)
+        self.history['system_state'].append(system_state)
+        
+        return {
+            'time': self.time,
+            'evidence_level': self.evidence_level,
+            'denial_level': self.denial_level,
+            'capture_level': self.capture_level,
+            'entropy': self.entropy,
+            'narrative_stability': self.narrative_stability,
+            'system_state': system_state
+        }
     
-    def regulatory_capture_step(self, dt: float = 0.1):
+    def run_simulation(self, steps=None):
         """
-        Perform a single time step of regulatory capture dynamics.
+        Run the simulation for the specified number of steps.
         
         Args:
-            dt: Time step size
-        """
-        if not HAS_NETWORKX:
-            logger.warning("NetworkX required for regulatory capture simulation")
-            return
+            steps (int, optional): Number of steps to run. If None, uses the
+                                  value from the configuration.
         
-        # Parameters
-        capture_factor = self.params['capture_factor']
-        
-        # Calculate influence propagation through the network
-        # This is a simplified model of how industry influence affects regulatory bodies
-        
-        # Get industry influence edges
-        industry_edges = [(u, v, d) for u, v, d in self.network.edges(data=True) 
-                         if u == 'Industry' and d['type'] == 'influence']
-        
-        # Propagate influence
-        for u, v, d in industry_edges:
-            # Higher weight means more influence
-            influence = d['weight'] * capture_factor
-            
-            # Increase denial proportional to influence
-            v_idx = self.institutions.index(v)
-            self.denial[v_idx] += dt * influence * (1 - self.denial[v_idx])
-            
-            # Decrease legitimacy proportional to influence
-            self.legitimacy[v_idx] -= dt * influence * self.legitimacy[v_idx] * 0.2
-        
-        # Ensure values stay in valid range
-        self.denial = np.clip(self.denial, 0, 1)
-        self.legitimacy = np.clip(self.legitimacy, 0, 1)
-        
-        # Update network
-        for i, inst in enumerate(self.institutions):
-            self.network.nodes[inst]['legitimacy'] = self.legitimacy[i]
-            self.network.nodes[inst]['denial'] = self.denial[i]
-    
-    def memetic_immunosuppression_step(self, dt: float = 0.1):
-        """
-        Perform a single time step of memetic immunosuppression dynamics.
-        
-        Args:
-            dt: Time step size
-        """
-        if not HAS_NETWORKX:
-            logger.warning("NetworkX required for memetic immunosuppression simulation")
-            return
-        
-        # Parameters
-        spread_rate = self.params['memetic_spread_rate']
-        
-        # Calculate memetic spread through the network
-        # This models how narratives spread between institutions
-        
-        # Get information/amplification edges
-        info_edges = [(u, v, d) for u, v, d in self.network.edges(data=True) 
-                     if d['type'] in ['information', 'amplification']]
-        
-        # Temporary array to store memetic effects
-        memetic_effect = np.zeros(len(self.institutions))
-        
-        # Propagate memetic effects
-        for u, v, d in info_edges:
-            u_idx = self.institutions.index(u)
-            v_idx = self.institutions.index(v)
-            
-            # Higher denial in source increases memetic spread
-            source_effect = self.denial[u_idx] * d['weight'] * spread_rate
-            
-            # Add to target's memetic effect
-            memetic_effect[v_idx] += source_effect
-        
-        # Apply memetic effects
-        for i in range(len(self.institutions)):
-            # Memetic effects increase denial and reduce legitimacy
-            self.denial[i] += dt * memetic_effect[i] * (1 - self.denial[i])
-            self.legitimacy[i] -= dt * memetic_effect[i] * self.legitimacy[i] * 0.1
-        
-        # Ensure values stay in valid range
-        self.denial = np.clip(self.denial, 0, 1)
-        self.legitimacy = np.clip(self.legitimacy, 0, 1)
-        
-        # Update network
-        if HAS_NETWORKX:
-            for i, inst in enumerate(self.institutions):
-                self.network.nodes[inst]['legitimacy'] = self.legitimacy[i]
-                self.network.nodes[inst]['denial'] = self.denial[i]
-    
-    def simulation_step(self, dt: float = 0.1):
-        """
-        Perform a complete simulation step combining all dynamics.
-        
-        Args:
-            dt: Time step size
-        """
-        # Run individual dynamics steps
-        self.denial_injury_step(dt)
-        self.regulatory_capture_step(dt)
-        self.memetic_immunosuppression_step(dt)
-    
-    def run_simulation(self, time_steps: Optional[int] = None, dt: float = 0.1) -> Dict[str, Any]:
-        """
-        Run the full simulation for the specified number of time steps.
-        
-        Args:
-            time_steps: Number of time steps to simulate
-            dt: Time step size
-            
         Returns:
-            Dictionary with simulation results
+            dict: Simulation results.
         """
-        if time_steps is None:
-            time_steps = self.params['time_steps']
+        if steps is None:
+            steps = self.config['simulation_steps']
         
-        logger.info(f"Starting institutional feedback simulation with {time_steps} time steps")
+        self.logger.info(f"Running institutional feedback simulation for {steps} steps")
         
-        # Reset state before simulation
-        self.reset_state()
+        # Run the simulation
+        start_time = time.time()
+        for _ in range(steps):
+            self.step()
         
-        # Run simulation
-        for _ in range(time_steps):
-            self.simulation_step(dt)
-            
-            # Log progress every 10% of steps
-            if time_steps > 10 and _ % (time_steps // 10) == 0:
-                logger.info(f"Simulation progress: {_ / time_steps * 100:.1f}%")
+        elapsed_time = time.time() - start_time
+        self.logger.info(f"Simulation completed in {elapsed_time:.2f} seconds")
         
-        logger.info("Simulation completed")
+        # Return results
+        return self.get_results()
+    
+    def get_results(self):
+        """
+        Get the simulation results.
         
-        # Prepare results
-        results = {
-            'params': self.params.copy(),
+        Returns:
+            dict: Simulation results.
+        """
+        return {
+            'config': self.config,
             'final_state': {
                 'time': self.time,
-                'legitimacy': self.legitimacy.tolist(),
-                'denial': self.denial.tolist(),
-                'injury': self.injury.tolist(),
-                'entropy': self.history['entropy'][-1]
+                'evidence_level': float(self.evidence_level),
+                'denial_level': float(self.denial_level),
+                'capture_level': float(self.capture_level),
+                'entropy': float(self.entropy),
+                'narrative_stability': float(self.narrative_stability),
+                'system_state': self.determine_system_state()
             },
             'history': {
                 'time': self.history['time'],
-                'legitimacy': [l.tolist() for l in self.history['legitimacy']],
-                'denial': [d.tolist() for d in self.history['denial']],
-                'injury': [i.tolist() for i in self.history['injury']],
-                'entropy': self.history['entropy']
-            },
-            'institutions': self.institutions
+                'evidence_level': [float(x) for x in self.history['evidence_level']],
+                'denial_level': [float(x) for x in self.history['denial_level']],
+                'capture_level': [float(x) for x in self.history['capture_level']],
+                'entropy': [float(x) for x in self.history['entropy']],
+                'narrative_stability': [float(x) for x in self.history['narrative_stability']],
+                'system_state': self.history['system_state']
+            }
         }
-        
-        return results
     
-    def plot_legitimacy_entropy(self, save_path: Optional[str] = None):
+    def visualize_network(self, save_path=None):
         """
-        Generate a plot of system legitimacy entropy over time.
+        Visualize the institutional network.
         
         Args:
-            save_path: Path to save the plot image
+            save_path (str, optional): Path to save the visualization.
+            
+        Returns:
+            matplotlib.figure.Figure: The network visualization figure.
         """
-        if len(self.history['time']) < 2:
-            logger.error("Not enough data for plotting. Run simulation first.")
-            return
+        if not HAS_NETWORKX or self.network is None:
+            self.logger.warning("NetworkX is required for network visualization but not installed.")
+            return None
         
-        plt.figure(figsize=(10, 6))
-        
-        # Plot entropy over time
-        plt.plot(self.history['time'], self.history['entropy'], 
-                 'r-', linewidth=2, label='System Legitimacy Entropy')
-        
-        # Add threshold line for critical entropy
-        critical_entropy = 2.0  # Placeholder value
-        plt.axhline(y=critical_entropy, color='k', linestyle='--', 
-                   label='Critical Entropy Threshold')
-        
-        # Add annotations for key events
-        # In a real implementation, these would be determined by the simulation
-        key_points = [
-            (20, 'Initial Denial Phase'),
-            (50, 'Regulatory Capture Acceleration'),
-            (80, 'Narrative Collapse Threshold')
-        ]
-        
-        for t, label in key_points:
-            if t < len(self.history['time']):
-                plt.annotate(
-                    label,
-                    (self.history['time'][t], self.history['entropy'][t]),
-                    xytext=(10, 10),
-                    textcoords='offset points',
-                    arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.2')
-                )
-        
-        plt.xlabel('Time')
-        plt.ylabel('Legitimacy Entropy')
-        plt.title('System Legitimacy Entropy Index')
-        plt.grid(True, alpha=0.3)
-        plt.legend()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            logger.info(f"Entropy plot saved to {save_path}")
-        
-        plt.close()
-    
-    def plot_denial_recursion_map(self, save_path: Optional[str] = None):
-        """
-        Generate a denial recursion map visualization.
-        
-        Args:
-            save_path: Path to save the plot image
-        """
-        if not HAS_NETWORKX or len(self.history['time']) < 2:
-            logger.error("NetworkX required for denial recursion map or not enough data.")
-            return
-        
+        # Create figure
         plt.figure(figsize=(12, 10))
         
-        # Get final state
-        pos = nx.spring_layout(self.network, seed=42)
+        # Get node positions using a layout algorithm
+        pos = nx.spring_layout(self.network, seed=self.config['random_seed'])
         
-        # Node sizes based on legitimacy (inverse)
-        node_sizes = [1000 * (1 - self.network.nodes[n]['legitimacy']) for n in self.network.nodes()]
+        # Get node attributes for visualization
+        node_types = [data.get('type', 'unknown') for _, data in self.network.nodes(data=True)]
+        node_influence = [data.get('influence', 0.5) * 1000 for _, data in self.network.nodes(data=True)]
+        node_denial = [data.get('denial_bias', 0.5) for _, data in self.network.nodes(data=True)]
         
-        # Node colors based on denial level
-        node_colors = [self.network.nodes[n]['denial'] for n in self.network.nodes()]
+        # Get edge weights
+        edge_weights = [data.get('weight', 0.5) * 3 for _, _, data in self.network.edges(data=True)]
         
-        # Edge widths based on weight
-        edge_widths = [d['weight'] * 2 for u, v, d in self.network.edges(data=True)]
+        # Create a colormap for node types
+        type_colors = {
+            'regulatory': 'red',
+            'research': 'blue',
+            'industry': 'green',
+            'information': 'orange',
+            'international': 'purple',
+            'professional': 'brown',
+            'advocacy': 'pink',
+            'unknown': 'gray'
+        }
+        
+        node_colors = [type_colors.get(t, 'gray') for t in node_types]
         
         # Draw the network
-        nx.draw_networkx_nodes(self.network, pos, 
-                              node_size=node_sizes,
-                              node_color=node_colors, 
-                              cmap=plt.cm.Reds,
-                              alpha=0.8)
+        nx.draw_networkx_nodes(self.network, pos, node_size=node_influence, node_color=node_denial, 
+                              cmap=cm.Reds, alpha=0.8)
         
-        nx.draw_networkx_edges(self.network, pos, 
-                              width=edge_widths,
-                              alpha=0.6, 
-                              edge_color='gray',
-                              arrows=True, 
-                              arrowsize=15)
+        nx.draw_networkx_edges(self.network, pos, width=edge_weights, alpha=0.6, 
+                              edge_color='gray', arrows=True, arrowsize=15)
         
-        nx.draw_networkx_labels(self.network, pos, font_size=12, font_weight='bold')
+        nx.draw_networkx_labels(self.network, pos, font_size=10, font_weight='bold')
         
-        # Add edge labels
-        edge_labels = {(u, v): d['type'] for u, v, d in self.network.edges(data=True)}
-        nx.draw_networkx_edge_labels(self.network, pos, edge_labels=edge_labels, font_size=8)
-        
-        # Add colorbar for denial levels
-        sm = plt.cm.ScalarMappable(cmap=plt.cm.Reds)
+        # Add a colorbar for denial bias
+        sm = plt.cm.ScalarMappable(cmap=cm.Reds, norm=plt.Normalize(0, 1))
         sm.set_array([])
         cbar = plt.colorbar(sm)
-        cbar.set_label('Denial Level')
+        cbar.set_label('Denial Bias')
         
-        plt.title('Institutional Denial Recursion Map')
+        # Add title and labels
+        plt.title('Institutional Feedback Network')
         plt.axis('off')
+        plt.tight_layout()
         
+        # Save if path provided
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            logger.info(f"Denial recursion map saved to {save_path}")
+            self.logger.info(f"Network visualization saved to {save_path}")
         
-        plt.close()
+        return plt.gcf()
     
-    def save_results(self, results: Dict[str, Any], filepath: str):
+    def visualize_simulation_results(self, save_path=None):
         """
-        Save simulation results to a JSON file.
+        Visualize the simulation results.
         
         Args:
-            results: Simulation results dictionary
-            filepath: Path to save the results
+            save_path (str, optional): Path to save the visualization.
+            
+        Returns:
+            matplotlib.figure.Figure: The results visualization figure.
         """
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        if not self.history['time']:
+            self.logger.warning("No simulation history available to visualize.")
+            return None
+        
+        # Create figure with subplots
+        fig, axs = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
+        
+        # Plot evidence, denial, and capture levels
+        axs[0].plot(self.history['time'], self.history['evidence_level'], 'b-', label='Evidence Level')
+        axs[0].plot(self.history['time'], self.history['denial_level'], 'r-', label='Denial Level')
+        axs[0].plot(self.history['time'], self.history['capture_level'], 'g-', label='Capture Level')
+        axs[0].set_ylabel('Level')
+        axs[0].set_title('Evidence, Denial, and Regulatory Capture')
+        axs[0].legend()
+        axs[0].grid(True)
+        
+        # Plot entropy and narrative stability
+        axs[1].plot(self.history['time'], self.history['entropy'], 'm-', label='System Entropy')
+        axs[1].plot(self.history['time'], self.history['narrative_stability'], 'c-', label='Narrative Stability')
+        axs[1].set_ylabel('Level')
+        axs[1].set_title('System Entropy and Narrative Stability')
+        axs[1].legend()
+        axs[1].grid(True)
+        
+        # Plot system state as a categorical variable
+        state_categories = ['stable', 'questioning', 'transitioning', 'contested', 'collapsing']
+        state_values = [state_categories.index(state) if state in state_categories else -1 
+                       for state in self.history['system_state']]
+        
+        axs[2].plot(self.history['time'], state_values, 'ko-')
+        axs[2].set_yticks(range(len(state_categories)))
+        axs[2].set_yticklabels(state_categories)
+        axs[2].set_ylabel('System State')
+        axs[2].set_xlabel('Time')
+        axs[2].set_title('System State Evolution')
+        axs[2].grid(True)
+        
+        # Add overall title
+        fig.suptitle('Institutional Feedback Simulation Results', fontsize=16)
+        plt.tight_layout(rect=[0, 0, 1, 0.97])  # Adjust for suptitle
+        
+        # Save if path provided
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            self.logger.info(f"Simulation results visualization saved to {save_path}")
+        
+        return fig
+    
+    def save_results(self, filename=None):
+        """
+        Save the simulation results to a file.
+        
+        Args:
+            filename (str, optional): Name of the file to save the results.
+                                     If None, a default name is generated.
+        
+        Returns:
+            str: Path to the saved file.
+        """
+        if filename is None:
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            filename = f"institutional_simulation_{timestamp}.json"
+        
+        filepath = os.path.join(self.config['output_dir'], filename)
+        
+        # Get results
+        results = self.get_results()
         
         # Save to file
         with open(filepath, 'w') as f:
             json.dump(results, f, indent=2)
         
-        logger.info(f"Results saved to {filepath}")
+        self.logger.info(f"Results saved to {filepath}")
+        
+        return filepath
 
 
 def run_sample_simulation():
-    """Run a sample simulation with default parameters."""
-    # Initialize model
+    """Run a sample institutional feedback simulation."""
+    # Create a model with default configuration
     model = InstitutionalFeedbackModel()
     
-    # Run simulation
-    results = model.run_simulation(time_steps=100)
+    # Run the simulation
+    model.run_simulation(steps=50)
     
-    # Create output directory
-    os.makedirs('output/institutional', exist_ok=True)
+    # Visualize the results
+    output_dir = model.config['output_dir']
+    os.makedirs(output_dir, exist_ok=True)
     
-    # Generate and save visualizations
-    model.plot_legitimacy_entropy(save_path='output/institutional/entropy_index.png')
-    model.plot_denial_recursion_map(save_path='output/institutional/denial_recursion_map.png')
+    model.visualize_network(save_path=os.path.join(output_dir, 'institutional_network.png'))
+    model.visualize_simulation_results(save_path=os.path.join(output_dir, 'simulation_results.png'))
     
-    # Save results
-    model.save_results(results, 'output/institutional/simulation_results.json')
+    # Save the results
+    model.save_results('sample_results.json')
     
-    return results
+    print("Sample institutional feedback simulation completed successfully.")
+    print(f"Results saved to {output_dir}")
+    
+    return model
 
 
 if __name__ == "__main__":
-    # Run a sample simulation when executed directly
-    run_sample_simulation()
+    # Run a sample simulation if the script is executed directly
+    model = run_sample_simulation()

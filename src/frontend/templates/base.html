@@ -12,227 +12,147 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
     <!-- Custom CSS -->
-    <style>
-        :root {
-            --primary-color: #8a2be2;
-            --secondary-color: #4b0082;
-            --accent-color: #ff4500;
-            --light-color: #f8f9fa;
-            --dark-color: #212529;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f5f5;
-            color: var(--dark-color);
-        }
-        
-        .navbar {
-            background-color: var(--primary-color);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        
-        .navbar-brand {
-            font-weight: bold;
-            color: white !important;
-        }
-        
-        .nav-link {
-            color: rgba(255, 255, 255, 0.85) !important;
-        }
-        
-        .nav-link:hover {
-            color: white !important;
-        }
-        
-        .btn-primary {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        
-        .btn-primary:hover {
-            background-color: var(--secondary-color);
-            border-color: var(--secondary-color);
-        }
-        
-        .card {
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            border: none;
-            transition: transform 0.3s ease;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .card-header {
-            background-color: var(--primary-color);
-            color: white;
-            font-weight: bold;
-        }
-        
-        footer {
-            background-color: var(--dark-color);
-            color: var(--light-color);
-            padding: 2rem 0;
-            margin-top: 3rem;
-        }
-        
-        .alert {
-            border-radius: 0;
-            margin-bottom: 0;
-        }
-        
-        /* Dashboard specific styles */
-        .dashboard-card {
-            height: 100%;
-        }
-        
-        .dashboard-icon {
-            font-size: 3rem;
-            color: var(--primary-color);
-            margin-bottom: 1rem;
-        }
-        
-        /* Custom styles for visualization containers */
-        .viz-container {
-            background-color: white;
-            border-radius: 5px;
-            padding: 1rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        
-        /* Hero section */
-        .hero {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            color: white;
-            padding: 4rem 0;
-            margin-bottom: 2rem;
-        }
-        
-        .hero h1 {
-            font-weight: bold;
-            margin-bottom: 1rem;
-        }
-        
-        .hero p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-        
-        /* Custom styles for testimonials */
-        .testimony-card {
-            border-left: 4px solid var(--primary-color);
-        }
-        
-        /* Custom styles for simulation controls */
-        .simulation-controls {
-            background-color: #f8f9fa;
-            border-radius: 5px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('serve_static', filename='css/main.css') }}">
     
-    {% block extra_css %}{% endblock %}
+    {% block head_extra %}{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="fas fa-biohazard me-2"></i>GASLIT-AF WARSTACK
+                <i class="fas fa-biohazard"></i> GASLIT-AF WARSTACK
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+                        <a class="nav-link {% if request.path == url_for('index') %}active{% endif %}" href="{{ url_for('index') }}">
+                            <i class="fas fa-home"></i> Home
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
+                        <a class="nav-link {% if request.path == url_for('dashboard') %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                            <i class="fas fa-chart-line"></i> Dashboard
+                        </a>
                     </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="modulesDropdown" role="button" data-bs-toggle="dropdown">
-                            Modules
+                            <i class="fas fa-microscope"></i> Modules
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{{ url_for('biological_dashboard') }}">Biological Modeling</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('genetic_dashboard') }}">Genetic Risk</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('institutional_dashboard') }}">Institutional Feedback</a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('legal_dashboard') }}">Legal & Policy</a></li>
+                            <li>
+                                <a class="dropdown-item {% if request.path == url_for('biological') %}active{% endif %}" href="{{ url_for('biological') }}">
+                                    <i class="fas fa-dna"></i> Biological Modeling
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.path == url_for('genetic') %}active{% endif %}" href="{{ url_for('genetic') }}">
+                                    <i class="fas fa-dna"></i> Genetic Risk Scanning
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.path == url_for('institutional') %}active{% endif %}" href="{{ url_for('institutional') }}">
+                                    <i class="fas fa-building"></i> Institutional Feedback
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if request.path == url_for('legal') %}active{% endif %}" href="{{ url_for('legal') }}">
+                                    <i class="fas fa-balance-scale"></i> Legal & Policy
+                                </a>
+                            </li>
                         </ul>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('tell_your_story') }}">Tell Your Story</a>
+                        <a class="nav-link {% if request.path == url_for('tell_your_story') %}active{% endif %}" href="{{ url_for('tell_your_story') }}">
+                            <i class="fas fa-comment-alt"></i> Tell Your Story
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('testimonies_page') }}">Testimonies</a>
+                        <a class="nav-link {% if request.path == url_for('testimonies') %}active{% endif %}" href="{{ url_for('testimonies') }}">
+                            <i class="fas fa-comments"></i> Testimonies
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == url_for('upload_genome') %}active{% endif %}" href="{{ url_for('upload_genome') }}">
+                            <i class="fas fa-upload"></i> Upload Genome
+                        </a>
                     </li>
                 </ul>
+                <div class="navbar-text">
+                    <span class="badge bg-danger">GASLIT-AF</span>
+                </div>
             </div>
         </div>
     </nav>
-    
+
     <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-    
+    <div class="container mt-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
     <!-- Main Content -->
-    <main class="container">
-        {% block content %}{% endblock %}
+    <main class="container my-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="mb-4">{% block page_title %}{% endblock %}</h1>
+                {% block content %}{% endblock %}
+            </div>
+        </div>
     </main>
-    
+
     <!-- Footer -->
-    <footer class="mt-5">
+    <footer class="bg-dark text-light py-4 mt-5">
         <div class="container">
             <div class="row">
-                <div class="col-md-4">
-                    <h5>GASLIT-AF WARSTACK</h5>
+                <div class="col-md-6">
+                    <h5><i class="fas fa-biohazard"></i> GASLIT-AF WARSTACK</h5>
                     <p>A modular simulation-and-exposure engine designed to prove institutional culpability via biological recursion and systemic denial modeling.</p>
                 </div>
-                <div class="col-md-4">
-                    <h5>Quick Links</h5>
+                <div class="col-md-3">
+                    <h5>Links</h5>
                     <ul class="list-unstyled">
-                        <li><a href="{{ url_for('index') }}" class="text-light">Home</a></li>
-                        <li><a href="{{ url_for('dashboard') }}" class="text-light">Dashboard</a></li>
-                        <li><a href="{{ url_for('tell_your_story') }}" class="text-light">Tell Your Story</a></li>
-                        <li><a href="{{ url_for('testimonies_page') }}" class="text-light">Testimonies</a></li>
+                        <li><a href="{{ url_for('index') }}" class="text-light"><i class="fas fa-home"></i> Home</a></li>
+                        <li><a href="{{ url_for('dashboard') }}" class="text-light"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+                        <li><a href="{{ url_for('tell_your_story') }}" class="text-light"><i class="fas fa-comment-alt"></i> Tell Your Story</a></li>
+                        <li><a href="{{ url_for('upload_genome') }}" class="text-light"><i class="fas fa-upload"></i> Upload Genome</a></li>
                     </ul>
                 </div>
-                <div class="col-md-4">
-                    <h5>Connect</h5>
-                    <div class="d-flex gap-3 fs-4">
-                        <a href="#" class="text-light"><i class="fab fa-twitter"></i></a>
-                        <a href="#" class="text-light"><i class="fab fa-github"></i></a>
-                        <a href="#" class="text-light"><i class="fab fa-discord"></i></a>
-                        <a href="#" class="text-light"><i class="fas fa-envelope"></i></a>
-                    </div>
+                <div class="col-md-3">
+                    <h5>Modules</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="{{ url_for('biological') }}" class="text-light"><i class="fas fa-dna"></i> Biological Modeling</a></li>
+                        <li><a href="{{ url_for('genetic') }}" class="text-light"><i class="fas fa-dna"></i> Genetic Risk Scanning</a></li>
+                        <li><a href="{{ url_for('institutional') }}" class="text-light"><i class="fas fa-building"></i> Institutional Feedback</a></li>
+                        <li><a href="{{ url_for('legal') }}" class="text-light"><i class="fas fa-balance-scale"></i> Legal & Policy</a></li>
+                    </ul>
                 </div>
             </div>
-            <hr class="mt-4 mb-3 border-light">
-            <div class="text-center">
-                <p class="mb-0">&copy; 2025 GASLIT-AF WARSTACK. Licensed under AGPL.</p>
+            <hr>
+            <div class="row">
+                <div class="col-12 text-center">
+                    <p class="mb-0">&copy; 2025 GASLIT-AF WARSTACK. Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0.html" class="text-light">AGPL-3.0</a>.</p>
+                </div>
             </div>
         </div>
     </footer>
-    
+
     <!-- Bootstrap JS Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- D3.js for visualizations -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('serve_static', filename='js/main.js') }}"></script>
     
     {% block scripts %}{% endblock %}
 </body>

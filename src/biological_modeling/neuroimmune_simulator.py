@@ -1,381 +1,499 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Neuroimmune Simulator Module for GASLIT-AF WARSTACK
+Neuroimmune Dynamics Simulator for GASLIT-AF WARSTACK
 
-This module implements simulations of neuroimmune dynamics using KPZ/fKPZχ models,
-ODE/PDE attractor maps, and phase portraits to model the core GASLIT-AF attractor states:
-spike protein neurotoxicity → cerebellar trauma → behavioral and autonomic collapse.
+This module simulates the core GASLIT-AF attractor states:
+- Spike protein neurotoxicity
+- Cerebellar trauma
+- Behavioral and autonomic collapse
 
-The module leverages Intel OneAPI and SYCL for hardware acceleration on Intel Arc GPUs.
+Using KPZ / fKPZχ simulations of neuroimmune dynamics, ODE/PDE attractor maps,
+and phase portraits of feedback loop entrapment.
 """
 
-import numpy as np
-import scipy.integrate as integrate
-import matplotlib.pyplot as plt
-from typing import Dict, List, Tuple, Optional, Union, Any
-import logging
 import os
+import sys
+import time
 import json
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
+from scipy.signal import find_peaks
+import matplotlib.cm as cm
+from matplotlib.colors import Normalize
+from mpl_toolkits.mplot3d import Axes3D
 
 # Optional imports for hardware acceleration
+try:
+    import torch
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+
 try:
     import dpctl
     import dpctl.tensor as dpt
     HAS_ONEAPI = True
 except ImportError:
     HAS_ONEAPI = False
-    logging.warning("Intel OneAPI not available. Using CPU-only mode.")
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 
 class NeuroimmuneDynamics:
     """
-    Simulates neuroimmune dynamics using various mathematical models.
+    Simulates neuroimmune dynamics using KPZ / fKPZχ models and ODE/PDE systems.
+    
+    This class implements various models of neuroimmune dynamics, focusing on
+    the interactions between spike proteins, cerebellar function, and autonomic
+    nervous system responses.
     """
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config=None):
         """
         Initialize the neuroimmune dynamics simulator.
         
         Args:
-            config: Configuration dictionary with simulation parameters
+            config (dict, optional): Configuration parameters for the simulation.
         """
-        self.config = config or {}
-        self.device = self._initialize_device()
-        
-        # Default parameters
-        self.params = {
-            'spike_toxicity': 0.75,  # Normalized toxicity factor (0-1)
-            'cerebellar_vulnerability': 0.65,  # Vulnerability factor (0-1)
-            'autonomic_resilience': 0.3,  # Resilience factor (0-1)
-            'time_steps': 1000,  # Number of time steps for simulation
-            'spatial_resolution': 100,  # Spatial grid resolution
-            'diffusion_coefficient': 0.1,  # Diffusion coefficient
-            'noise_amplitude': 0.05,  # Noise amplitude for KPZ
-            'lambda_nonlinearity': 1.0,  # λ parameter for KPZ nonlinearity
-            'nu_viscosity': 0.1,  # ν parameter for KPZ viscosity
+        # Default configuration
+        self.config = {
+            'grid_size': 100,
+            'time_steps': 1000,
+            'dt': 0.01,
+            'noise_strength': 0.1,
+            'diffusion_constant': 0.5,
+            'reaction_rate': 1.0,
+            'coupling_strength': 0.8,
+            'initial_condition': 'random',
+            'boundary_condition': 'periodic',
+            'use_hardware_acceleration': True,
+            'output_dir': 'results/biological_modeling',
+            'random_seed': 42
         }
         
-        # Update with user-provided parameters
-        self.params.update(self.config.get('params', {}))
+        # Update with user configuration if provided
+        if config is not None:
+            self.config.update(config)
+        
+        # Set random seed for reproducibility
+        np.random.seed(self.config['random_seed'])
         
         # Initialize state variables
-        self.reset_state()
-    
-    def _initialize_device(self) -> Optional[Any]:
-        """
-        Initialize the compute device (CPU or GPU via OneAPI).
-        
-        Returns:
-            Device object or None if using CPU
-        """
-        if not HAS_ONEAPI:
-            return None
-            
-        try:
-            # Try to get a GPU device
-            gpu_devices = [d for d in dpctl.get_devices() if d.is_gpu]
-            if gpu_devices:
-                logger.info(f"Using GPU device: {gpu_devices[0].name}")
-                return gpu_devices[0]
-            else:
-                logger.info("No GPU devices found, falling back to CPU")
-                return dpctl.select_default_device()
-        except Exception as e:
-            logger.error(f"Error initializing OneAPI device: {e}")
-            return None
-    
-    def reset_state(self):
-        """Reset the simulation state."""
-        self.time = 0
+        self.t = 0.0
         self.iteration = 0
+        self.grid = None
+        self.history = []
+        self.attractor_states = []
+        self.phase_portrait = None
         
-        # Initialize spatial grid
-        n = self.params['spatial_resolution']
-        self.x = np.linspace(0, 1, n)
-        self.y = np.linspace(0, 1, n)
-        self.X, self.Y = np.meshgrid(self.x, self.y)
+        # Initialize hardware acceleration if available
+        self.device = self._initialize_device()
         
-        # Initialize field variables
-        self.h = np.zeros((n, n))  # Height field for KPZ
-        self.immune_activation = np.zeros((n, n))  # Immune activation field
-        self.neurotoxicity = np.zeros((n, n))  # Neurotoxicity field
-        
-        # Initialize with small random perturbations
-        self.h += np.random.normal(0, 0.01, (n, n))
-        self.immune_activation += np.random.normal(0, 0.01, (n, n))
-        self.neurotoxicity += np.random.normal(0, 0.01, (n, n))
-        
-        # History for tracking attractor states
-        self.history = {
-            'time': [],
-            'mean_h': [],
-            'mean_immune': [],
-            'mean_neurotox': [],
-            'attractor_state': []
-        }
+        # Create output directory if it doesn't exist
+        os.makedirs(self.config['output_dir'], exist_ok=True)
     
-    def kpz_step(self, dt: float = 0.01) -> np.ndarray:
-        """
-        Perform a single time step of the KPZ equation.
+    def _initialize_device(self):
+        """Initialize hardware acceleration device if available."""
+        device = None
         
-        The KPZ equation: ∂h/∂t = ν∇²h + (λ/2)(∇h)² + η
-        
-        Args:
-            dt: Time step size
+        if self.config['use_hardware_acceleration']:
+            if HAS_ONEAPI:
+                try:
+                    # Try to use Intel GPU if available
+                    gpu_devices = [d for d in dpctl.get_devices() if d.is_gpu]
+                    if gpu_devices:
+                        device = gpu_devices[0]
+                        print(f"Using Intel OneAPI with device: {device}")
+                    else:
+                        cpu_devices = [d for d in dpctl.get_devices() if d.is_cpu]
+                        if cpu_devices:
+                            device = cpu_devices[0]
+                            print(f"Using Intel OneAPI with device: {device}")
+                except Exception as e:
+                    print(f"Error initializing Intel OneAPI: {e}")
             
-        Returns:
-            Updated height field
-        """
-        n = self.params['spatial_resolution']
-        ν = self.params['nu_viscosity']
-        λ = self.params['lambda_nonlinearity']
-        D = self.params['noise_amplitude']
+            elif HAS_TORCH:
+                try:
+                    if torch.cuda.is_available():
+                        device = "cuda"
+                        print("Using PyTorch with CUDA")
+                    else:
+                        device = "cpu"
+                        print("Using PyTorch with CPU")
+                except Exception as e:
+                    print(f"Error initializing PyTorch: {e}")
         
-        # Compute spatial derivatives using finite differences
-        # Central difference for Laplacian (∇²h)
-        laplacian = np.zeros_like(self.h)
-        for i in range(1, n-1):
-            for j in range(1, n-1):
-                laplacian[i, j] = (self.h[i+1, j] + self.h[i-1, j] + 
-                                  self.h[i, j+1] + self.h[i, j-1] - 4*self.h[i, j])
+        if device is None:
+            print("Using NumPy for computations (no hardware acceleration)")
         
-        # Forward difference for gradient squared ((∇h)²)
-        grad_squared = np.zeros_like(self.h)
-        for i in range(n-1):
-            for j in range(n-1):
-                dx = self.h[i+1, j] - self.h[i, j]
-                dy = self.h[i, j+1] - self.h[i, j]
-                grad_squared[i, j] = dx**2 + dy**2
-        
-        # Random noise term (η)
-        noise = np.random.normal(0, np.sqrt(dt), (n, n))
-        
-        # Update height field using KPZ equation
-        self.h += dt * (ν * laplacian + (λ/2) * grad_squared) + np.sqrt(2*D*dt) * noise
-        
-        return self.h
+        return device
     
-    def coupled_dynamics_step(self, dt: float = 0.01):
-        """
-        Perform a single time step of the coupled neuroimmune dynamics.
+    def initialize_grid(self):
+        """Initialize the simulation grid based on configuration."""
+        size = self.config['grid_size']
         
-        Args:
-            dt: Time step size
-        """
-        # Update KPZ height field
-        self.kpz_step(dt)
-        
-        # Parameters
-        spike_tox = self.params['spike_toxicity']
-        cereb_vuln = self.params['cerebellar_vulnerability']
-        auto_resil = self.params['autonomic_resilience']
-        
-        # Coupled dynamics equations
-        # 1. Spike protein drives immune activation
-        immune_activation_rate = spike_tox * (1 - self.immune_activation) - 0.1 * self.immune_activation
-        
-        # 2. Immune activation and spike toxicity drive neurotoxicity
-        neurotox_rate = (spike_tox * self.immune_activation * (1 - self.neurotoxicity) - 
-                         auto_resil * self.neurotoxicity)
-        
-        # 3. Cerebellar vulnerability amplifies neurotoxicity effects on KPZ dynamics
-        kpz_coupling = cereb_vuln * self.neurotoxicity * (1 - np.abs(self.h))
-        
-        # Update fields
-        self.immune_activation += dt * immune_activation_rate
-        self.neurotoxicity += dt * neurotox_rate
-        self.h += dt * kpz_coupling
-        
-        # Ensure values stay in valid range
-        self.immune_activation = np.clip(self.immune_activation, 0, 1)
-        self.neurotoxicity = np.clip(self.neurotoxicity, 0, 1)
-        
-        # Update time and iteration
-        self.time += dt
-        self.iteration += 1
-        
-        # Record history
-        self.history['time'].append(self.time)
-        self.history['mean_h'].append(np.mean(self.h))
-        self.history['mean_immune'].append(np.mean(self.immune_activation))
-        self.history['mean_neurotox'].append(np.mean(self.neurotoxicity))
-        
-        # Determine attractor state
-        mean_neurotox = np.mean(self.neurotoxicity)
-        if mean_neurotox < 0.3:
-            state = "Resilient"
-        elif mean_neurotox < 0.7:
-            state = "Vulnerable"
+        if self.config['initial_condition'] == 'random':
+            self.grid = np.random.rand(size, size)
+        elif self.config['initial_condition'] == 'center_peak':
+            self.grid = np.zeros((size, size))
+            center = size // 2
+            radius = size // 10
+            for i in range(size):
+                for j in range(size):
+                    if (i - center)**2 + (j - center)**2 < radius**2:
+                        self.grid[i, j] = 1.0
+        elif self.config['initial_condition'] == 'gradient':
+            x = np.linspace(0, 1, size)
+            y = np.linspace(0, 1, size)
+            X, Y = np.meshgrid(x, y)
+            self.grid = X * Y
         else:
-            state = "Collapse"
-        self.history['attractor_state'].append(state)
+            # Default to random
+            self.grid = np.random.rand(size, size)
+        
+        # Store initial state
+        self.history.append(self.grid.copy())
+        
+        return self.grid
     
-    def run_simulation(self, time_steps: Optional[int] = None, dt: float = 0.01) -> Dict[str, Any]:
+    def kpz_step(self):
         """
-        Run the full simulation for the specified number of time steps.
+        Perform a single step of the KPZ (Kardar-Parisi-Zhang) equation.
         
-        Args:
-            time_steps: Number of time steps to simulate
-            dt: Time step size
-            
-        Returns:
-            Dictionary with simulation results
+        The KPZ equation models the growth of an interface and is given by:
+        ∂h/∂t = ν∇²h + (λ/2)(∇h)² + η
+        
+        where:
+        - h is the height field (our grid)
+        - ν is the diffusion constant
+        - λ is the coupling strength
+        - η is a noise term
         """
-        if time_steps is None:
-            time_steps = self.params['time_steps']
+        # Extract parameters
+        dt = self.config['dt']
+        D = self.config['diffusion_constant']
+        noise = self.config['noise_strength']
+        coupling = self.config['coupling_strength']
         
-        logger.info(f"Starting simulation with {time_steps} time steps")
+        # Make a copy of the current grid
+        new_grid = self.grid.copy()
         
-        # Reset state before simulation
-        self.reset_state()
-        
-        # Run simulation
-        for _ in range(time_steps):
-            self.coupled_dynamics_step(dt)
-            
-            # Log progress every 10% of steps
-            if _ % (time_steps // 10) == 0:
-                logger.info(f"Simulation progress: {_ / time_steps * 100:.1f}%")
-        
-        logger.info("Simulation completed")
-        
-        # Prepare results
-        results = {
-            'params': self.params.copy(),
-            'final_state': {
-                'time': self.time,
-                'mean_height': float(np.mean(self.h)),
-                'mean_immune_activation': float(np.mean(self.immune_activation)),
-                'mean_neurotoxicity': float(np.mean(self.neurotoxicity)),
-                'final_attractor_state': self.history['attractor_state'][-1]
-            },
-            'history': {
-                'time': self.history['time'],
-                'mean_height': self.history['mean_h'],
-                'mean_immune_activation': self.history['mean_immune'],
-                'mean_neurotoxicity': self.history['mean_neurotox'],
-                'attractor_state': self.history['attractor_state']
-            }
-        }
-        
-        return results
-    
-    def plot_phase_portrait(self, save_path: Optional[str] = None):
-        """
-        Generate a phase portrait of the simulation results.
-        
-        Args:
-            save_path: Path to save the plot image
-        """
-        if len(self.history['mean_immune']) < 2:
-            logger.error("Not enough data for phase portrait. Run simulation first.")
-            return
-        
-        plt.figure(figsize=(10, 8))
-        
-        # Create a colormap based on time
-        colors = plt.cm.viridis(np.linspace(0, 1, len(self.history['time'])))
-        
-        # Plot the trajectory in the phase space
-        plt.scatter(
-            self.history['mean_immune'], 
-            self.history['mean_neurotox'],
-            c=colors, 
-            s=10, 
-            alpha=0.7
-        )
-        
-        # Add arrows to show direction
-        step = max(1, len(self.history['mean_immune']) // 20)
-        for i in range(0, len(self.history['mean_immune']) - step, step):
-            plt.arrow(
-                self.history['mean_immune'][i],
-                self.history['mean_neurotox'][i],
-                self.history['mean_immune'][i+step] - self.history['mean_immune'][i],
-                self.history['mean_neurotox'][i+step] - self.history['mean_neurotox'][i],
-                head_width=0.01, 
-                head_length=0.02, 
-                fc='black', 
-                ec='black',
-                alpha=0.7
-            )
-        
-        # Add labels for attractor states
-        attractor_states = set(self.history['attractor_state'])
-        for state in attractor_states:
-            indices = [i for i, s in enumerate(self.history['attractor_state']) if s == state]
-            if indices:
-                mid_idx = indices[len(indices)//2]
-                plt.annotate(
-                    state,
-                    (self.history['mean_immune'][mid_idx], self.history['mean_neurotox'][mid_idx]),
-                    fontsize=12,
-                    bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.7)
+        # Compute the Laplacian (∇²h)
+        laplacian = np.zeros_like(self.grid)
+        for i in range(1, self.grid.shape[0] - 1):
+            for j in range(1, self.grid.shape[1] - 1):
+                laplacian[i, j] = (
+                    self.grid[i+1, j] + self.grid[i-1, j] +
+                    self.grid[i, j+1] + self.grid[i, j-1] - 4 * self.grid[i, j]
                 )
         
-        # Add colorbar to show time progression
-        sm = plt.cm.ScalarMappable(cmap=plt.cm.viridis)
-        sm.set_array([])
-        cbar = plt.colorbar(sm)
-        cbar.set_label('Time Progression')
+        # Compute the gradient squared term (∇h)²
+        gradient_x = np.zeros_like(self.grid)
+        gradient_y = np.zeros_like(self.grid)
         
-        plt.xlabel('Immune Activation')
-        plt.ylabel('Neurotoxicity')
-        plt.title('Phase Portrait of Neuroimmune Dynamics')
-        plt.grid(True, alpha=0.3)
+        for i in range(1, self.grid.shape[0] - 1):
+            for j in range(1, self.grid.shape[1] - 1):
+                gradient_x[i, j] = (self.grid[i+1, j] - self.grid[i-1, j]) / 2
+                gradient_y[i, j] = (self.grid[i, j+1] - self.grid[i, j-1]) / 2
+        
+        gradient_squared = gradient_x**2 + gradient_y**2
+        
+        # Generate noise term
+        eta = np.random.normal(0, noise, self.grid.shape)
+        
+        # Update the grid using the KPZ equation
+        new_grid = self.grid + dt * (
+            D * laplacian + 
+            coupling * gradient_squared / 2 + 
+            eta
+        )
+        
+        # Apply boundary conditions
+        if self.config['boundary_condition'] == 'periodic':
+            # Copy the edges to the opposite sides
+            new_grid[0, :] = new_grid[-2, :]
+            new_grid[-1, :] = new_grid[1, :]
+            new_grid[:, 0] = new_grid[:, -2]
+            new_grid[:, -1] = new_grid[:, 1]
+        else:
+            # Fixed boundary conditions (edges stay at 0)
+            new_grid[0, :] = 0
+            new_grid[-1, :] = 0
+            new_grid[:, 0] = 0
+            new_grid[:, -1] = 0
+        
+        # Update the grid
+        self.grid = new_grid
+        
+        # Update time and iteration
+        self.t += dt
+        self.iteration += 1
+        
+        # Store the current state if needed
+        if self.iteration % 10 == 0:
+            self.history.append(self.grid.copy())
+        
+        return self.grid
+    
+    def run_simulation(self, steps=None):
+        """
+        Run the KPZ simulation for the specified number of steps.
+        
+        Args:
+            steps (int, optional): Number of steps to run. If None, uses the
+                                  value from the configuration.
+        
+        Returns:
+            list: History of grid states during the simulation.
+        """
+        if steps is None:
+            steps = self.config['time_steps']
+        
+        # Initialize the grid if not already done
+        if self.grid is None:
+            self.initialize_grid()
+        
+        # Run the simulation
+        start_time = time.time()
+        for _ in range(steps):
+            self.kpz_step()
+        
+        elapsed_time = time.time() - start_time
+        print(f"Simulation completed in {elapsed_time:.2f} seconds")
+        
+        return self.history
+    
+    def compute_attractor_states(self):
+        """
+        Compute the attractor states of the system.
+        
+        This method analyzes the simulation history to identify stable
+        attractor states in the system dynamics.
+        
+        Returns:
+            list: Identified attractor states.
+        """
+        if not self.history:
+            raise ValueError("No simulation history available. Run the simulation first.")
+        
+        # Compute the average value of the grid over time
+        avg_values = [np.mean(grid) for grid in self.history]
+        
+        # Find peaks in the average values
+        peaks, _ = find_peaks(avg_values, height=0, distance=20)
+        
+        # Extract the attractor states
+        self.attractor_states = [self.history[i] for i in peaks]
+        
+        return self.attractor_states
+    
+    def generate_phase_portrait(self, param1_range, param2_range, param1_name='diffusion_constant', param2_name='coupling_strength'):
+        """
+        Generate a phase portrait by varying two parameters.
+        
+        Args:
+            param1_range (list): Range of values for the first parameter.
+            param2_range (list): Range of values for the second parameter.
+            param1_name (str): Name of the first parameter.
+            param2_name (str): Name of the second parameter.
+        
+        Returns:
+            numpy.ndarray: Phase portrait data.
+        """
+        # Initialize the phase portrait
+        portrait = np.zeros((len(param1_range), len(param2_range)))
+        
+        # Iterate over parameter values
+        for i, p1 in enumerate(param1_range):
+            for j, p2 in enumerate(param2_range):
+                # Update the configuration
+                config = self.config.copy()
+                config[param1_name] = p1
+                config[param2_name] = p2
+                
+                # Create a new simulator with this configuration
+                sim = NeuroimmuneDynamics(config)
+                sim.initialize_grid()
+                
+                # Run a short simulation
+                sim.run_simulation(steps=100)
+                
+                # Compute a metric for the phase portrait
+                # (e.g., average value, variance, etc.)
+                portrait[i, j] = np.var(sim.grid)
+        
+        self.phase_portrait = portrait
+        return portrait
+    
+    def visualize_grid(self, grid=None, title=None, save_path=None):
+        """
+        Visualize the current state of the grid.
+        
+        Args:
+            grid (numpy.ndarray, optional): Grid to visualize. If None, uses the current grid.
+            title (str, optional): Title for the plot.
+            save_path (str, optional): Path to save the visualization.
+        """
+        if grid is None:
+            grid = self.grid
+        
+        if grid is None:
+            raise ValueError("No grid available to visualize.")
+        
+        plt.figure(figsize=(10, 8))
+        plt.imshow(grid, cmap='viridis', origin='lower')
+        plt.colorbar(label='Value')
+        
+        if title:
+            plt.title(title)
+        else:
+            plt.title(f'Grid State at t={self.t:.2f}, Iteration {self.iteration}')
+        
+        plt.xlabel('X')
+        plt.ylabel('Y')
         
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            logger.info(f"Phase portrait saved to {save_path}")
+            print(f"Visualization saved to {save_path}")
         
         plt.close()
     
-    def save_results(self, results: Dict[str, Any], filepath: str):
+    def visualize_history(self, interval=10, save_dir=None):
         """
-        Save simulation results to a JSON file.
+        Visualize the history of the grid states.
         
         Args:
-            results: Simulation results dictionary
-            filepath: Path to save the results
+            interval (int): Interval between frames to visualize.
+            save_dir (str, optional): Directory to save the visualizations.
         """
-        # Convert numpy arrays to lists for JSON serialization
-        serializable_results = json.loads(
-            json.dumps(results, default=lambda x: x.tolist() if isinstance(x, np.ndarray) else x)
-        )
+        if not self.history:
+            raise ValueError("No simulation history available. Run the simulation first.")
         
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+        
+        for i, grid in enumerate(self.history[::interval]):
+            t = i * interval * self.config['dt']
+            title = f'Grid State at t={t:.2f}, Iteration {i * interval}'
+            
+            save_path = None
+            if save_dir:
+                save_path = os.path.join(save_dir, f'grid_state_{i:04d}.png')
+            
+            self.visualize_grid(grid, title, save_path)
+    
+    def visualize_phase_portrait(self, param1_name='diffusion_constant', param2_name='coupling_strength', save_path=None):
+        """
+        Visualize the phase portrait.
+        
+        Args:
+            param1_name (str): Name of the first parameter.
+            param2_name (str): Name of the second parameter.
+            save_path (str, optional): Path to save the visualization.
+        """
+        if self.phase_portrait is None:
+            raise ValueError("No phase portrait available. Generate it first.")
+        
+        plt.figure(figsize=(10, 8))
+        plt.imshow(self.phase_portrait, cmap='viridis', origin='lower', aspect='auto')
+        plt.colorbar(label='Variance')
+        plt.title(f'Phase Portrait: {param1_name} vs {param2_name}')
+        plt.xlabel(param1_name)
+        plt.ylabel(param2_name)
+        
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"Phase portrait saved to {save_path}")
+        
+        plt.close()
+    
+    def save_results(self, filename=None):
+        """
+        Save the simulation results to a file.
+        
+        Args:
+            filename (str, optional): Name of the file to save the results.
+                                     If None, a default name is generated.
+        """
+        if filename is None:
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            filename = f"neuroimmune_simulation_{timestamp}.json"
+        
+        filepath = os.path.join(self.config['output_dir'], filename)
+        
+        # Prepare the results
+        results = {
+            'config': self.config,
+            'final_state': self.grid.tolist() if self.grid is not None else None,
+            'time': self.t,
+            'iterations': self.iteration,
+            'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
+        }
         
         # Save to file
         with open(filepath, 'w') as f:
-            json.dump(serializable_results, f, indent=2)
+            json.dump(results, f, indent=2)
         
-        logger.info(f"Results saved to {filepath}")
+        print(f"Results saved to {filepath}")
+        
+        return filepath
+    
+    def load_results(self, filepath):
+        """
+        Load simulation results from a file.
+        
+        Args:
+            filepath (str): Path to the results file.
+        """
+        with open(filepath, 'r') as f:
+            results = json.load(f)
+        
+        # Update the configuration
+        self.config = results['config']
+        
+        # Load the final state
+        if results['final_state'] is not None:
+            self.grid = np.array(results['final_state'])
+        
+        # Update time and iteration
+        self.t = results['time']
+        self.iteration = results['iterations']
+        
+        print(f"Results loaded from {filepath}")
+        
+        return results
 
 
 def run_sample_simulation():
-    """Run a sample simulation with default parameters."""
+    """Run a sample simulation and visualize the results."""
+    # Create a simulator with default configuration
     simulator = NeuroimmuneDynamics()
-    results = simulator.run_simulation(time_steps=500)
     
-    # Generate and save phase portrait
-    os.makedirs('output', exist_ok=True)
-    simulator.plot_phase_portrait(save_path='output/phase_portrait.png')
+    # Initialize the grid
+    simulator.initialize_grid()
     
-    # Save results
-    simulator.save_results(results, 'output/simulation_results.json')
+    # Run the simulation
+    simulator.run_simulation(steps=500)
     
-    return results
+    # Visualize the final state
+    output_dir = simulator.config['output_dir']
+    os.makedirs(output_dir, exist_ok=True)
+    
+    simulator.visualize_grid(save_path=os.path.join(output_dir, 'final_state.png'))
+    
+    # Generate and visualize a phase portrait
+    param1_range = np.linspace(0.1, 1.0, 10)
+    param2_range = np.linspace(0.1, 1.0, 10)
+    simulator.generate_phase_portrait(param1_range, param2_range)
+    simulator.visualize_phase_portrait(save_path=os.path.join(output_dir, 'phase_portrait.png'))
+    
+    # Save the results
+    simulator.save_results()
+    
+    return simulator
 
 
 if __name__ == "__main__":
-    # Run a sample simulation when executed directly
-    run_sample_simulation()
+    # Run a sample simulation if the script is executed directly
+    simulator = run_sample_simulation()
+    
+    print("Sample simulation completed successfully.")

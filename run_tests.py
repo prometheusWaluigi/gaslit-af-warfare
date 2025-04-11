@@ -1,136 +1,183 @@
 #!/usr/bin/env python3
 """
-Test runner script for GASLIT-AF WARSTACK.
-This script runs the test suite and generates a report.
+GASLIT-AF WARSTACK Test Runner
+
+This script provides a convenient way to run tests for the GASLIT-AF WARSTACK project.
+It offers various options for running specific test modules, generating reports,
+and controlling test execution.
 """
 
 import os
 import sys
 import argparse
 import subprocess
-import datetime
+import time
 import json
+from pathlib import Path
+
+# Define test modules
+TEST_MODULES = {
+    'biological': 'tests/test_biological_modeling.py',
+    'genetic': 'tests/test_genetic_risk.py',
+    'institutional': 'tests/test_institutional_feedback.py',
+    'legal': 'tests/test_legal_policy.py',
+    'frontend': 'tests/test_frontend.py',
+    'all': 'tests'
+}
+
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Run GASLIT-AF WARSTACK tests')
-    parser.add_argument('--module', '-m', choices=['all', 'biological', 'genetic', 'institutional', 'legal', 'frontend'],
-                        default='all', help='Module to test (default: all)')
-    parser.add_argument('--output', '-o', default='test_report.json',
-                        help='Output file for test report (default: test_report.json)')
-    parser.add_argument('--verbose', '-v', action='store_true',
-                        help='Verbose output')
-    parser.add_argument('--html', action='store_true',
-                        help='Generate HTML report (requires pytest-html)')
+    parser = argparse.ArgumentParser(
+        description="GASLIT-AF WARSTACK Test Runner"
+    )
+    
+    parser.add_argument(
+        '--module', '-m',
+        choices=list(TEST_MODULES.keys()),
+        default='all',
+        help="Test module to run (default: all)"
+    )
+    
+    parser.add_argument(
+        '--verbose', '-v',
+        action='store_true',
+        help="Enable verbose output"
+    )
+    
+    parser.add_argument(
+        '--coverage', '-c',
+        action='store_true',
+        help="Generate coverage report"
+    )
+    
+    parser.add_argument(
+        '--html-report',
+        action='store_true',
+        help="Generate HTML test report"
+    )
+    
+    parser.add_argument(
+        '--json-report',
+        action='store_true',
+        help="Generate JSON test report"
+    )
+    
+    parser.add_argument(
+        '--skip-slow',
+        action='store_true',
+        help="Skip slow tests"
+    )
+    
+    parser.add_argument(
+        '--skip-gpu',
+        action='store_true',
+        help="Skip tests that require GPU"
+    )
+    
+    parser.add_argument(
+        '--failfast',
+        action='store_true',
+        help="Stop on first failure"
+    )
+    
+    parser.add_argument(
+        '--output-dir',
+        default='test_results',
+        help="Directory for test reports (default: test_results)"
+    )
+    
     return parser.parse_args()
 
-def run_tests(module, verbose=False, html=False):
-    """Run the tests for the specified module."""
-    print(f"Running tests for module: {module}")
+
+def run_tests(args):
+    """Run the tests with the specified options."""
+    # Create output directory if it doesn't exist
+    os.makedirs(args.output_dir, exist_ok=True)
     
-    # Base command
+    # Build pytest command
     cmd = ['pytest']
     
+    # Add test module
+    cmd.append(TEST_MODULES[args.module])
+    
     # Add verbosity
-    if verbose:
+    if args.verbose:
         cmd.append('-v')
     
-    # Add module filter
-    if module != 'all':
-        cmd.append(f'-m {module}')
+    # Add coverage
+    if args.coverage:
+        cmd.extend(['--cov=src', f'--cov-report=html:{args.output_dir}/coverage'])
     
     # Add HTML report
-    if html:
-        cmd.append('--html=test_report.html')
-    
-    # Add JSON report
-    cmd.append('--json-report')
-    cmd.append('--json-report-file=test_report.json')
-    
-    # Run the command
-    try:
-        result = subprocess.run(' '.join(cmd), shell=True, check=True, 
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               universal_newlines=True)
-        print(result.stdout)
-        return True, result.stdout
-    except subprocess.CalledProcessError as e:
-        print(f"Error running tests: {e}")
-        print(e.stdout)
-        print(e.stderr)
-        return False, e.stdout + '\n' + e.stderr
-
-def generate_report(success, output, module, output_file):
-    """Generate a report from the test results."""
-    # Load the JSON report if it exists
-    json_report = {}
-    if os.path.exists('test_report.json'):
-        with open('test_report.json', 'r') as f:
-            json_report = json.load(f)
-    
-    # Create the report
-    report = {
-        'timestamp': datetime.datetime.now().isoformat(),
-        'module': module,
-        'success': success,
-        'summary': {
-            'total': json_report.get('summary', {}).get('total', 0),
-            'passed': json_report.get('summary', {}).get('passed', 0),
-            'failed': json_report.get('summary', {}).get('failed', 0),
-            'skipped': json_report.get('summary', {}).get('skipped', 0),
-            'error': json_report.get('summary', {}).get('error', 0),
-            'xfailed': json_report.get('summary', {}).get('xfailed', 0),
-            'xpassed': json_report.get('summary', {}).get('xpassed', 0),
-        },
-        'tests': json_report.get('tests', []),
-        'output': output
-    }
-    
-    # Write the report
-    with open(output_file, 'w') as f:
-        json.dump(report, f, indent=2)
-    
-    print(f"Report written to {output_file}")
-    
-    # Print summary
-    print("\nTest Summary:")
-    print(f"Total: {report['summary']['total']}")
-    print(f"Passed: {report['summary']['passed']}")
-    print(f"Failed: {report['summary']['failed']}")
-    print(f"Skipped: {report['summary']['skipped']}")
-    print(f"Error: {report['summary']['error']}")
-    print(f"XFailed: {report['summary']['xfailed']}")
-    print(f"XPassed: {report['summary']['xpassed']}")
-    
-    return report
-
-def main():
-    """Main function."""
-    args = parse_args()
-    
-    # Check if pytest-json-report is installed
-    try:
-        import pytest_json_report
-    except ImportError:
-        print("Warning: pytest-json-report is not installed. Installing...")
-        subprocess.run([sys.executable, '-m', 'pip', 'install', 'pytest-json-report'], check=True)
-    
-    # Check if pytest-html is installed if --html is specified
-    if args.html:
+    if args.html_report:
         try:
             import pytest_html
+            cmd.extend([f'--html={args.output_dir}/report.html', '--self-contained-html'])
         except ImportError:
-            print("Warning: pytest-html is not installed. Installing...")
-            subprocess.run([sys.executable, '-m', 'pip', 'install', 'pytest-html'], check=True)
+            print("Warning: pytest-html not installed. Skipping HTML report generation.")
+    
+    # Add JSON report
+    if args.json_report:
+        try:
+            import pytest_json_report
+            cmd.extend([f'--json-report', f'--json-report-file={args.output_dir}/report.json'])
+        except ImportError:
+            print("Warning: pytest-json-report not installed. Skipping JSON report generation.")
+    
+    # Skip slow tests
+    if args.skip_slow:
+        cmd.append('-m "not slow"')
+    
+    # Skip GPU tests
+    if args.skip_gpu:
+        cmd.append('-m "not gpu"')
+    
+    # Stop on first failure
+    if args.failfast:
+        cmd.append('--exitfirst')
     
     # Run the tests
-    success, output = run_tests(args.module, args.verbose, args.html)
+    print(f"Running tests: {' '.join(cmd)}")
+    start_time = time.time()
+    result = subprocess.run(cmd)
+    elapsed_time = time.time() - start_time
     
-    # Generate the report
-    report = generate_report(success, output, args.module, args.output)
+    # Print summary
+    print(f"\nTest run completed in {elapsed_time:.2f} seconds")
+    print(f"Exit code: {result.returncode}")
     
-    # Return success/failure
-    return 0 if success else 1
+    if args.json_report:
+        json_report_path = os.path.join(args.output_dir, 'report.json')
+        if os.path.exists(json_report_path):
+            try:
+                with open(json_report_path, 'r') as f:
+                    report = json.load(f)
+                
+                summary = report.get('summary', {})
+                print(f"\nTest Summary:")
+                print(f"  Total: {summary.get('total', 0)}")
+                print(f"  Passed: {summary.get('passed', 0)}")
+                print(f"  Failed: {summary.get('failed', 0)}")
+                print(f"  Skipped: {summary.get('skipped', 0)}")
+                print(f"  Error: {summary.get('error', 0)}")
+                
+                if args.coverage:
+                    coverage = report.get('coverage', {})
+                    if coverage:
+                        print(f"\nCoverage Summary:")
+                        print(f"  Overall: {coverage.get('total_percent', 0):.2f}%")
+            except Exception as e:
+                print(f"Error parsing JSON report: {e}")
+    
+    return result.returncode
 
-if __name__ == '__main__':
+
+def main():
+    """Main entry point."""
+    args = parse_args()
+    return run_tests(args)
+
+
+if __name__ == "__main__":
     sys.exit(main())

@@ -1,8 +1,14 @@
-FROM python:3.9-slim
+# GASLIT-AF WARSTACK Dockerfile
+# A modular simulation-and-exposure engine
 
-LABEL maintainer="GASLIT-AF WARSTACK Team"
-LABEL description="GASLIT-AF WARSTACK - A modular simulation-and-exposure engine"
-LABEL version="0.1.0"
+# Use Python 3.10 as base image
+FROM python:3.10-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on
 
 # Set working directory
 WORKDIR /app
@@ -12,8 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
+    libffi-dev \
+    libssl-dev \
     git \
-    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -21,21 +28,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Install spaCy model
+RUN python -m spacy download en_core_web_sm
 
 # Copy project files
 COPY . .
 
+# Make scripts executable
+RUN chmod +x gaslit-af-runner.py run_tests.py
+
 # Create necessary directories
-RUN mkdir -p data results logs
+RUN mkdir -p results logs uploads data/testimonies data/genomes \
+    static/img/biological static/img/genetic static/img/institutional static/img/legal
 
-# Set environment variables
-ENV PYTHONPATH=/app
-ENV FLASK_APP=src/frontend/app.py
-ENV FLASK_ENV=production
-
-# Expose port for Flask app
+# Expose port for web interface
 EXPOSE 5000
 
-# Command to run the application
-CMD ["python", "-m", "src.frontend.app"]
+# Set entrypoint
+ENTRYPOINT ["python", "src/frontend/app.py"]
+
+# Default command
+CMD ["--host", "0.0.0.0", "--port", "5000"]
