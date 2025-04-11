@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Main application service
+  app:
+    build: .
+    volumes:
+      - .:/app
+      - ./output:/app/output
+    command: python gaslit-af-runner.py
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - gaslit-network
+
+  # Biological modeling service
+  bio-modeling:
+    build: .
+    volumes:
+      - .:/app
+      - ./output:/app/output
+    command: python gaslit-af-runner.py bio --time-steps 500
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - gaslit-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: gpu
+              capabilities: [gpu]
+              count: all
+
+  # Frontend service (placeholder for future implementation)
+  frontend:
+    build: .
+    volumes:
+      - .:/app
+    command: python gaslit-af-runner.py frontend --port 3000
+    ports:
+      - "3000:3000"
+    environment:
+      - PYTHONPATH=/app
+    networks:
+      - gaslit-network
+    depends_on:
+      - app
+
+networks:
+  gaslit-network:
+    driver: bridge
+
+volumes:
+  output:

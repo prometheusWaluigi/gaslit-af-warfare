@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}GASLIT-AF WARSTACK - Home{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero text-center rounded">
+    <div class="container">
+        <h1 class="display-4">GASLIT-AF WARSTACK</h1>
+        <p class="lead">A modular simulation-and-exposure engine designed to prove institutional culpability via biological recursion and systemic denial modeling.</p>
+        <div class="mt-4">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-light btn-lg me-2">View Dashboard</a>
+            <a href="{{ url_for('tell_your_story') }}" class="btn btn-outline-light btn-lg">Tell Your Story</a>
+        </div>
+    </div>
+</section>
+
+<!-- Main Content -->
+<div class="row mt-5">
+    <div class="col-md-8">
+        <h2 class="mb-4">Project Overview</h2>
+        <p>GASLIT-AF WARSTACK is a comprehensive computational framework that models the biological, genetic, institutional, legal, and advocacy dimensions of systemic health impacts. The project aims to simulate and visualize complex feedback loops between biological mechanisms, institutional responses, and policy decisions.</p>
+        
+        <div class="row mt-5">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="fas fa-microscope me-2"></i> Biological Modeling
+                    </div>
+                    <div class="card-body">
+                        <p>Simulates the core GASLIT-AF attractor states: spike protein neurotoxicity → cerebellar trauma → behavioral and autonomic collapse.</p>
+                        <a href="{{ url_for('biological_dashboard') }}" class="btn btn-sm btn-primary">Explore</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="fas fa-dna me-2"></i> Genetic Risk Scanning
+                    </div>
+                    <div class="card-body">
+                        <p>Parse FASTQ/VCF files for fragility architecture (γ) and allostatic collapse risk (Λ, Ω).</p>
+                        <a href="{{ url_for('genetic_dashboard') }}" class="btn btn-sm btn-primary">Explore</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="fas fa-project-diagram me-2"></i> Institutional Feedback
+                    </div>
+                    <div class="card-body">
+                        <p>Build dynamic denial-injury-denial loops, regulatory capture graphs, and memetic immunosuppression nets.</p>
+                        <a href="{{ url_for('institutional_dashboard') }}" class="btn btn-sm btn-primary">Explore</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="fas fa-balance-scale me-2"></i> Legal & Policy
+                    </div>
+                    <div class="card-body">
+                        <p>Run simulation logic against the legal narrative layer: NCVIA, EUA claims, suppressed data trails, ethical obligations.</p>
+                        <a href="{{ url_for('legal_dashboard') }}" class="btn btn-sm btn-primary">Explore</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-bullhorn me-2"></i> Advocacy Portal
+            </div>
+            <div class="card-body">
+                <p>Make it real. Share your story, upload your genetic data for analysis, and connect with others.</p>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('tell_your_story') }}" class="btn btn-primary">Tell Your Story</a>
+                    <a href="{{ url_for('testimonies_page') }}" class="btn btn-outline-primary">View Testimonies</a>
+                    <a href="{{ url_for('upload_genome') }}" class="btn btn-outline-primary">Upload Genome</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line me-2"></i> Latest Statistics
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Testimonies Collected
+                        <span class="badge bg-primary rounded-pill">{{ testimonies_count|default(0) }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Genomes Analyzed
+                        <span class="badge bg-primary rounded-pill">{{ genomes_count|default(0) }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Simulations Run
+                        <span class="badge bg-primary rounded-pill">{{ simulations_count|default(0) }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Call to Action -->
+<div class="card mt-5 bg-light">
+    <div class="card-body p-4 text-center">
+        <h3>Ready to explore the data?</h3>
+        <p class="lead">Access our comprehensive dashboard to visualize the complex interplay between biological, institutional, and legal factors.</p>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg mt-2">Go to Dashboard</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Any page-specific JavaScript can go here
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('GASLIT-AF WARSTACK frontend loaded');
+    });
+</script>
+{% endblock %}

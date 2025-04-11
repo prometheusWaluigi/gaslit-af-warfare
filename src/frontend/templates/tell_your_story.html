@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}GASLIT-AF WARSTACK - Tell Your Story{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-label {
+        font-weight: 500;
+    }
+    
+    .symptom-checkbox {
+        margin-right: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .story-guidelines {
+        background-color: rgba(138, 43, 226, 0.05);
+        border-left: 4px solid var(--primary-color);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .privacy-notice {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 2rem;
+        padding: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <h1 class="mb-4">Tell Your Story</h1>
+        
+        <div class="story-guidelines">
+            <h5><i class="fas fa-info-circle me-2"></i>Why Your Story Matters</h5>
+            <p>Personal testimonies are a crucial part of the GASLIT-AF WARSTACK project. By sharing your experience, you contribute to our collective understanding of systemic impacts and help establish patterns that might otherwise remain invisible.</p>
+            <p class="mb-0">Your story will be mapped to our simulation models, connecting individual experiences to broader systemic patterns of institutional denial and biological impact.</p>
+        </div>
+        
+        <form method="POST" action="{{ url_for('tell_your_story') }}" class="needs-validation" novalidate>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-user me-2"></i> Personal Information
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="name" name="name" placeholder="Your name (or Anonymous)">
+                            <div class="form-text">You may use a pseudonym or remain anonymous if preferred.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="email" class="form-label">Email (Optional)</label>
+                            <input type="email" class="form-control" id="email" name="email" placeholder="your.email@example.com">
+                            <div class="form-text">Only used for follow-up if you consent.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Age Range</label>
+                        <select class="form-select" name="age_range">
+                            <option value="" selected>Prefer not to say</option>
+                            <option value="18-29">18-29</option>
+                            <option value="30-39">30-39</option>
+                            <option value="40-49">40-49</option>
+                            <option value="50-59">50-59</option>
+                            <option value="60-69">60-69</option>
+                            <option value="70+">70+</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-notes-medical me-2"></i> Symptoms & Experiences
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="form-label">Common Symptoms (Select all that apply)</label>
+                        <div class="d-flex flex-wrap">
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="fatigue" id="symptom-fatigue">
+                                <label class="form-check-label" for="symptom-fatigue">Fatigue</label>
+                            </div>
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="brain fog" id="symptom-brain-fog">
+                                <label class="form-check-label" for="symptom-brain-fog">Brain Fog</label>
+                            </div>
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="tremors" id="symptom-tremors">
+                                <label class="form-check-label" for="symptom-tremors">Tremors</label>
+                            </div>
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="pots" id="symptom-pots">
+                                <label class="form-check-label" for="symptom-pots">POTS</label>
+                            </div>
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="tachycardia" id="symptom-tachycardia">
+                                <label class="form-check-label" for="symptom-tachycardia">Tachycardia</label>
+                            </div>
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="neuropathy" id="symptom-neuropathy">
+                                <label class="form-check-label" for="symptom-neuropathy">Neuropathy</label>
+                            </div>
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="mcas" id="symptom-mcas">
+                                <label class="form-check-label" for="symptom-mcas">MCAS</label>
+                            </div>
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="dysautonomia" id="symptom-dysautonomia">
+                                <label class="form-check-label" for="symptom-dysautonomia">Dysautonomia</label>
+                            </div>
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="insomnia" id="symptom-insomnia">
+                                <label class="form-check-label" for="symptom-insomnia">Insomnia</label>
+                            </div>
+                            <div class="symptom-checkbox">
+                                <input class="form-check-input" type="checkbox" name="symptoms" value="pem" id="symptom-pem">
+                                <label class="form-check-label" for="symptom-pem">PEM</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="other-symptoms" class="form-label">Other Symptoms</label>
+                        <input type="text" class="form-control" id="other-symptoms" name="other_symptoms" placeholder="Enter any other symptoms, separated by commas">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="onset-date" class="form-label">Approximate Onset Date</label>
+                        <input type="month" class="form-control" id="onset-date" name="onset_date">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-comment-alt me-2"></i> Your Story
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="story" class="form-label">Share Your Experience</label>
+                        <textarea class="form-control" id="story" name="story" rows="8" required placeholder="Please share your experience in as much detail as you're comfortable with. Include any patterns you've noticed, institutional responses you've encountered, or insights you've gained."></textarea>
+                        <div class="invalid-feedback">
+                            Please provide your story.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="institutional-response" class="form-label">Institutional Responses</label>
+                        <textarea class="form-control" id="institutional-response" name="institutional_response" rows="4" placeholder="Describe any experiences with healthcare providers, government agencies, employers, or other institutions."></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="consent" name="consent" required>
+                    <label class="form-check-label" for="consent">
+                        I consent to having my story included in the GASLIT-AF WARSTACK database and used for analysis and advocacy purposes.
+                    </label>
+                    <div class="invalid-feedback">
+                        You must consent to submit your story.
+                    </div>
+                </div>
+                
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="contact-consent" name="contact_consent">
+                    <label class="form-check-label" for="contact-consent">
+                        I consent to being contacted for follow-up questions or research opportunities.
+                    </label>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary btn-lg">Submit Your Story</button>
+            </div>
+            
+            <div class="privacy-notice">
+                <h6>Privacy Notice</h6>
+                <p class="mb-0">Your privacy is important to us. All personal information is stored securely and will never be shared with third parties without your explicit consent. You may request removal of your story at any time by contacting us. For research and advocacy purposes, anonymized data may be aggregated and analyzed to identify patterns and systemic issues.</p>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Form validation
+    document.addEventListener('DOMContentLoaded', function() {
+        const forms = document.querySelectorAll('.needs-validation');
+        
+        Array.from(forms).forEach(form => {
+            form.addEventListener('submit', event => {
+                if (!form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                
+                form.classList.add('was-validated');
+            }, false);
+        });
+    });
+</script>
+{% endblock %}

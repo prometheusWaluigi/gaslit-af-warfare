@@ -1,0 +1,498 @@
+{% extends "base.html" %}
+
+{% block title %}GASLIT-AF WARSTACK - Biological Modeling{% endblock %}
+
+{% block extra_css %}
+<style>
+    .simulation-controls {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .parameter-slider {
+        margin-bottom: 1.5rem;
+    }
+    
+    .parameter-value {
+        font-weight: bold;
+        color: var(--primary-color);
+    }
+    
+    .chart-container {
+        height: 400px;
+        position: relative;
+        margin-bottom: 2rem;
+    }
+    
+    .attractor-state {
+        font-size: 1.5rem;
+        font-weight: bold;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+    
+    .attractor-state.resilient {
+        background-color: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+    
+    .attractor-state.vulnerable {
+        background-color: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+    }
+    
+    .attractor-state.collapse {
+        background-color: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+    }
+    
+    .results-card {
+        height: 100%;
+    }
+    
+    .results-table th {
+        width: 50%;
+    }
+    
+    .phase-portrait {
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        overflow: hidden;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Biological Modeling Dashboard</h1>
+            <button class="btn btn-primary" id="run-simulation-btn">
+                <i class="fas fa-play me-2"></i> Run New Simulation
+            </button>
+        </div>
+        
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i> This dashboard simulates neuroimmune dynamics using KPZ/fKPZχ models to demonstrate attractor states in the GASLIT-AF system.
+        </div>
+        
+        <!-- Simulation Controls (initially hidden, shown when Run New Simulation is clicked) -->
+        <div class="simulation-controls" id="simulation-controls" style="display: none;">
+            <h4 class="mb-3">Simulation Parameters</h4>
+            
+            <form id="simulation-form">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="parameter-slider">
+                            <label for="spike-toxicity" class="form-label">Spike Protein Toxicity: <span class="parameter-value" id="spike-toxicity-value">0.75</span></label>
+                            <input type="range" class="form-range" min="0" max="1" step="0.01" value="0.75" id="spike-toxicity">
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">Low</small>
+                                <small class="text-muted">High</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="parameter-slider">
+                            <label for="cerebellar-vulnerability" class="form-label">Cerebellar Vulnerability: <span class="parameter-value" id="cerebellar-vulnerability-value">0.65</span></label>
+                            <input type="range" class="form-range" min="0" max="1" step="0.01" value="0.65" id="cerebellar-vulnerability">
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">Low</small>
+                                <small class="text-muted">High</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="parameter-slider">
+                            <label for="autonomic-resilience" class="form-label">Autonomic Resilience: <span class="parameter-value" id="autonomic-resilience-value">0.30</span></label>
+                            <input type="range" class="form-range" min="0" max="1" step="0.01" value="0.30" id="autonomic-resilience">
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">Low</small>
+                                <small class="text-muted">High</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="parameter-slider">
+                            <label for="time-steps" class="form-label">Simulation Time Steps: <span class="parameter-value" id="time-steps-value">500</span></label>
+                            <input type="range" class="form-range" min="100" max="1000" step="100" value="500" id="time-steps">
+                            <div class="d-flex justify-content-between">
+                                <small class="text-muted">100</small>
+                                <small class="text-muted">1000</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-play me-2"></i> Run Simulation
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="cancel-simulation-btn">
+                        <i class="fas fa-times me-2"></i> Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Simulation Results -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-chart-line me-2"></i> Neuroimmune Dynamics</span>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary active" data-view="neurotoxicity">Neurotoxicity</button>
+                            <button class="btn btn-outline-secondary" data-view="immune">Immune Activation</button>
+                            <button class="btn btn-outline-secondary" data-view="combined">Combined</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container" id="dynamics-chart"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card results-card">
+                    <div class="card-header">
+                        <i class="fas fa-clipboard-list me-2"></i> Simulation Results
+                    </div>
+                    <div class="card-body">
+                        {% if results and results.final_state %}
+                            <div class="attractor-state {{ results.final_state.final_attractor_state|lower }}">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                Attractor State: {{ results.final_state.final_attractor_state }}
+                            </div>
+                            
+                            <table class="table table-sm results-table">
+                                <tbody>
+                                    <tr>
+                                        <th>Mean Neurotoxicity:</th>
+                                        <td>{{ "%.3f"|format(results.final_state.mean_neurotoxicity) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Mean Immune Activation:</th>
+                                        <td>{{ "%.3f"|format(results.final_state.mean_immune_activation) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Mean Height Field:</th>
+                                        <td>{{ "%.3f"|format(results.final_state.mean_height) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Simulation Time:</th>
+                                        <td>{{ "%.2f"|format(results.final_state.time) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-exclamation-circle fs-1 text-muted mb-3"></i>
+                                <p>No simulation results available. Run a simulation to see results.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Phase Portrait -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-project-diagram me-2"></i> Phase Portrait
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="phase-portrait">
+                            {% if results %}
+                                <img src="/static/images/phase_portrait.png" class="img-fluid" alt="Phase Portrait" id="phase-portrait-img">
+                            {% else %}
+                                <div class="text-center py-5">
+                                    <p class="text-muted">Phase portrait will be generated after running a simulation.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h5>Attractor States Explanation</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">
+                                <strong class="text-success">Resilient:</strong> System maintains homeostasis despite perturbations.
+                            </li>
+                            <li class="list-group-item">
+                                <strong class="text-warning">Vulnerable:</strong> System shows signs of instability but hasn't collapsed.
+                            </li>
+                            <li class="list-group-item">
+                                <strong class="text-danger">Collapse:</strong> System has entered an irreversible pathological state.
+                            </li>
+                        </ul>
+                        <p class="mt-3">
+                            The phase portrait visualizes the relationship between immune activation and neurotoxicity, 
+                            showing how the system evolves over time and which attractor state it settles into.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Parameter Sensitivity -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-sliders-h me-2"></i> Parameter Sensitivity Analysis
+            </div>
+            <div class="card-body">
+                <p>
+                    This analysis shows how changes in key parameters affect the likelihood of different attractor states.
+                    Higher values indicate increased sensitivity to that parameter.
+                </p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="chart-container" id="sensitivity-chart"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Resilient</th>
+                                    <th>Vulnerable</th>
+                                    <th>Collapse</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Spike Toxicity</td>
+                                    <td class="text-danger">-0.85</td>
+                                    <td class="text-warning">+0.32</td>
+                                    <td class="text-danger">+0.92</td>
+                                </tr>
+                                <tr>
+                                    <td>Cerebellar Vulnerability</td>
+                                    <td class="text-danger">-0.76</td>
+                                    <td class="text-success">+0.15</td>
+                                    <td class="text-danger">+0.83</td>
+                                </tr>
+                                <tr>
+                                    <td>Autonomic Resilience</td>
+                                    <td class="text-success">+0.91</td>
+                                    <td class="text-warning">+0.45</td>
+                                    <td class="text-success">-0.88</td>
+                                </tr>
+                                <tr>
+                                    <td>Initial Immune State</td>
+                                    <td class="text-warning">-0.42</td>
+                                    <td class="text-danger">+0.67</td>
+                                    <td class="text-warning">+0.38</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Simulation controls toggle
+        const runSimulationBtn = document.getElementById('run-simulation-btn');
+        const simulationControls = document.getElementById('simulation-controls');
+        const cancelSimulationBtn = document.getElementById('cancel-simulation-btn');
+        
+        runSimulationBtn.addEventListener('click', function() {
+            simulationControls.style.display = 'block';
+            runSimulationBtn.style.display = 'none';
+        });
+        
+        cancelSimulationBtn.addEventListener('click', function() {
+            simulationControls.style.display = 'none';
+            runSimulationBtn.style.display = 'inline-block';
+        });
+        
+        // Parameter sliders
+        const sliders = {
+            'spike-toxicity': document.getElementById('spike-toxicity-value'),
+            'cerebellar-vulnerability': document.getElementById('cerebellar-vulnerability-value'),
+            'autonomic-resilience': document.getElementById('autonomic-resilience-value'),
+            'time-steps': document.getElementById('time-steps-value')
+        };
+        
+        for (const [id, valueElement] of Object.entries(sliders)) {
+            const slider = document.getElementById(id);
+            if (slider && valueElement) {
+                slider.addEventListener('input', function() {
+                    valueElement.textContent = this.value;
+                });
+            }
+        }
+        
+        // Simulation form submission
+        const simulationForm = document.getElementById('simulation-form');
+        if (simulationForm) {
+            simulationForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                
+                // In a real implementation, this would send the parameters to the server
+                // and run a new simulation
+                
+                // For demo purposes, just show a loading state and then hide the controls
+                runSimulationBtn.disabled = true;
+                runSimulationBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Running...';
+                
+                setTimeout(() => {
+                    simulationControls.style.display = 'none';
+                    runSimulationBtn.style.display = 'inline-block';
+                    runSimulationBtn.disabled = false;
+                    runSimulationBtn.innerHTML = '<i class="fas fa-play me-2"></i> Run New Simulation';
+                    
+                    // Alert for demo purposes
+                    alert('Simulation complete! In a real implementation, this would update the charts and results.');
+                }, 2000);
+            });
+        }
+        
+        // View toggle buttons
+        const viewButtons = document.querySelectorAll('[data-view]');
+        viewButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove active class from all buttons
+                viewButtons.forEach(btn => btn.classList.remove('active'));
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                
+                // In a real implementation, this would update the chart view
+                console.log(`Changing view to: ${this.dataset.view}`);
+            });
+        });
+        
+        // Initialize charts
+        initDynamicsChart();
+        initSensitivityChart();
+    });
+    
+    function initDynamicsChart() {
+        const ctx = document.getElementById('dynamics-chart');
+        if (!ctx) return;
+        
+        // Sample data for demonstration
+        const timeData = Array.from({length: 100}, (_, i) => i);
+        const neurotoxicityData = timeData.map(t => 0.1 + 0.7 * (1 - Math.exp(-t/30)));
+        const immuneData = timeData.map(t => 0.2 + 0.6 * (1 - Math.exp(-t/20)));
+        
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timeData,
+                datasets: [
+                    {
+                        label: 'Neurotoxicity',
+                        data: neurotoxicityData,
+                        borderColor: 'rgba(220, 53, 69, 0.8)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Immune Activation',
+                        data: immuneData,
+                        borderColor: 'rgba(0, 123, 255, 0.8)',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time Steps'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Intensity'
+                        },
+                        min: 0,
+                        max: 1
+                    }
+                }
+            }
+        });
+    }
+    
+    function initSensitivityChart() {
+        const ctx = document.getElementById('sensitivity-chart');
+        if (!ctx) return;
+        
+        new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: [
+                    'Spike Toxicity',
+                    'Cerebellar Vulnerability',
+                    'Autonomic Resilience',
+                    'Initial Immune State',
+                    'Diffusion Coefficient',
+                    'Noise Amplitude'
+                ],
+                datasets: [
+                    {
+                        label: 'Resilient',
+                        data: [0.15, 0.24, 0.91, 0.58, 0.42, 0.35],
+                        backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                        borderColor: 'rgba(40, 167, 69, 0.8)',
+                        pointBackgroundColor: 'rgba(40, 167, 69, 1)'
+                    },
+                    {
+                        label: 'Vulnerable',
+                        data: [0.32, 0.45, 0.45, 0.67, 0.53, 0.48],
+                        backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                        borderColor: 'rgba(255, 193, 7, 0.8)',
+                        pointBackgroundColor: 'rgba(255, 193, 7, 1)'
+                    },
+                    {
+                        label: 'Collapse',
+                        data: [0.92, 0.83, 0.12, 0.38, 0.65, 0.72],
+                        backgroundColor: 'rgba(220, 53, 69, 0.2)',
+                        borderColor: 'rgba(220, 53, 69, 0.8)',
+                        pointBackgroundColor: 'rgba(220, 53, 69, 1)'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        min: 0,
+                        max: 1,
+                        ticks: {
+                            stepSize: 0.2
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

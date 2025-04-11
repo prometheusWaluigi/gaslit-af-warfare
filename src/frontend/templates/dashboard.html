@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}GASLIT-AF WARSTACK - Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .metric-card {
+        border-left: 4px solid var(--primary-color);
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: var(--primary-color);
+    }
+    
+    .metric-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+    
+    .module-link {
+        text-decoration: none;
+        color: inherit;
+    }
+    
+    .module-link:hover .card {
+        border-color: var(--primary-color);
+    }
+    
+    .dashboard-summary {
+        background-color: rgba(138, 43, 226, 0.05);
+        border-radius: 5px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">System Dashboard</h1>
+
+<div class="dashboard-summary">
+    <div class="row">
+        <div class="col-md-9">
+            <h4>GASLIT-AF System Status</h4>
+            <p>This dashboard provides a comprehensive overview of the GASLIT-AF WARSTACK simulation engine. Monitor key metrics across biological, genetic, institutional, and legal domains to track system-wide patterns and emergent phenomena.</p>
+        </div>
+        <div class="col-md-3 text-end">
+            <button class="btn btn-primary" id="refreshDashboard">
+                <i class="fas fa-sync-alt me-2"></i> Refresh Data
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card h-100 metric-card">
+            <div class="card-body">
+                <div class="metric-label">Biological Attractor State</div>
+                <div class="metric-value" id="bioAttractorValue">
+                    {{ results.biological.final_state.final_attractor_state|default('N/A') }}
+                </div>
+                <div class="small text-muted">
+                    <i class="fas fa-microscope me-1"></i> Neuroimmune Dynamics
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card h-100 metric-card">
+            <div class="card-body">
+                <div class="metric-label">Genetic Fragility (γ)</div>
+                <div class="metric-value" id="geneticFragilityValue">
+                    {% if results.genetic and results.genetic.risk_results %}
+                        {{ "%.2f"|format(results.genetic.risk_results.fragility_gamma) }}
+                    {% else %}
+                        0.67
+                    {% endif %}
+                </div>
+                <div class="small text-muted">
+                    <i class="fas fa-dna me-1"></i> Collapse Risk Factor
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card h-100 metric-card">
+            <div class="card-body">
+                <div class="metric-label">System Legitimacy Entropy</div>
+                <div class="metric-value" id="entropyValue">
+                    {% if results.institutional and results.institutional.final_state %}
+                        {{ "%.2f"|format(results.institutional.final_state.entropy) }}
+                    {% else %}
+                        1.84
+                    {% endif %}
+                </div>
+                <div class="small text-muted">
+                    <i class="fas fa-project-diagram me-1"></i> Institutional Feedback
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card h-100 metric-card">
+            <div class="card-body">
+                <div class="metric-label">Shield Breach Probability</div>
+                <div class="metric-value" id="shieldBreachValue">
+                    {% if results.legal and results.legal.final_state %}
+                        {{ "%.2f"|format(results.legal.final_state.shield_breach_probability) }}
+                    {% else %}
+                        0.73
+                    {% endif %}
+                </div>
+                <div class="small text-muted">
+                    <i class="fas fa-balance-scale me-1"></i> Legal & Policy
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Charts -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-chart-line me-2"></i> Biological-Institutional Coupling</span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary active" data-timeframe="1m">1M</button>
+                    <button class="btn btn-outline-secondary" data-timeframe="6m">6M</button>
+                    <button class="btn btn-outline-secondary" data-timeframe="1y">1Y</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" id="bioCouplingChart"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-chart-bar me-2"></i> Institutional-Legal Feedback Loop</span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary active" data-timeframe="1m">1M</button>
+                    <button class="btn btn-outline-secondary" data-timeframe="6m">6M</button>
+                    <button class="btn btn-outline-secondary" data-timeframe="1y">1Y</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" id="legalFeedbackChart"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Module Cards -->
+<h3 class="mb-3">Module Dashboards</h3>
+<div class="row">
+    <div class="col-md-6 col-lg-3 mb-4">
+        <a href="{{ url_for('biological_dashboard') }}" class="module-link">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-microscope"></i>
+                    </div>
+                    <h5>Biological Modeling</h5>
+                    <p class="text-muted">Neuroimmune dynamics and attractor states</p>
+                </div>
+                <div class="card-footer bg-transparent text-center">
+                    <span class="badge bg-primary">{{ results.biological.final_state.final_attractor_state|default('No Data') }}</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-6 col-lg-3 mb-4">
+        <a href="{{ url_for('genetic_dashboard') }}" class="module-link">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-dna"></i>
+                    </div>
+                    <h5>Genetic Risk</h5>
+                    <p class="text-muted">Fragility architecture and collapse risk</p>
+                </div>
+                <div class="card-footer bg-transparent text-center">
+                    <span class="badge bg-primary">{{ genomes_count }} Genomes</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-6 col-lg-3 mb-4">
+        <a href="{{ url_for('institutional_dashboard') }}" class="module-link">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-project-diagram"></i>
+                    </div>
+                    <h5>Institutional Feedback</h5>
+                    <p class="text-muted">Denial loops and regulatory capture</p>
+                </div>
+                <div class="card-footer bg-transparent text-center">
+                    <span class="badge bg-primary">{{ results.institutional.institutions|default([])|length|default(0) }} Institutions</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-md-6 col-lg-3 mb-4">
+        <a href="{{ url_for('legal_dashboard') }}" class="module-link">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-balance-scale"></i>
+                    </div>
+                    <h5>Legal & Policy</h5>
+                    <p class="text-muted">Liability and shield breach analysis</p>
+                </div>
+                <div class="card-footer bg-transparent text-center">
+                    <span class="badge bg-primary">{{ results.legal.events|default([])|length|default(0) }} Events</span>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Testimonies Section -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-comments me-2"></i> Recent Testimonies</span>
+                <a href="{{ url_for('testimonies_page') }}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                {% if testimonies_count > 0 %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="testimony-card p-3 mb-3">
+                                <h5>John Doe</h5>
+                                <p class="text-muted small">May 15, 2023</p>
+                                <p>I experienced severe neurological symptoms after exposure...</p>
+                                <div>
+                                    <span class="badge bg-secondary me-1">fatigue</span>
+                                    <span class="badge bg-secondary me-1">brain fog</span>
+                                    <span class="badge bg-secondary">tremors</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="testimony-card p-3 mb-3">
+                                <h5>Jane Smith</h5>
+                                <p class="text-muted small">June 22, 2023</p>
+                                <p>My autonomic nervous system has been severely affected...</p>
+                                <div>
+                                    <span class="badge bg-secondary me-1">pots</span>
+                                    <span class="badge bg-secondary me-1">tachycardia</span>
+                                    <span class="badge bg-secondary">fatigue</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="text-center text-muted my-4">No testimonies have been submitted yet.</p>
+                {% endif %}
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('tell_your_story') }}" class="btn btn-primary">Share Your Story</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Sample data for charts (would be replaced with real data from backend)
+        const timeData = Array.from({length: 100}, (_, i) => i);
+        
+        // Biological-Institutional Coupling Chart
+        const bioCouplingCtx = document.getElementById('bioCouplingChart');
+        if (bioCouplingCtx) {
+            const bioCouplingChart = new Chart(bioCouplingCtx, {
+                type: 'line',
+                data: {
+                    labels: timeData,
+                    datasets: [
+                        {
+                            label: 'Neurotoxicity',
+                            data: timeData.map(t => 0.2 + 0.6 * (1 - Math.exp(-t/30))),
+                            borderColor: 'rgba(138, 43, 226, 0.8)',
+                            backgroundColor: 'rgba(138, 43, 226, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Institutional Denial',
+                            data: timeData.map(t => 0.1 + 0.7 * (1 - Math.exp(-t/50))),
+                            borderColor: 'rgba(255, 69, 0, 0.8)',
+                            backgroundColor: 'rgba(255, 69, 0, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Intensity'
+                            },
+                            min: 0,
+                            max: 1
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Legal Feedback Chart
+        const legalFeedbackCtx = document.getElementById('legalFeedbackChart');
+        if (legalFeedbackCtx) {
+            const legalFeedbackChart = new Chart(legalFeedbackCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Evidence Level', 'Liability Risk', 'Class Action Viability', 'Shield Breach'],
+                    datasets: [
+                        {
+                            label: 'Current',
+                            data: [0.65, 0.73, 0.58, 0.82],
+                            backgroundColor: 'rgba(138, 43, 226, 0.7)'
+                        },
+                        {
+                            label: 'Previous',
+                            data: [0.45, 0.52, 0.38, 0.61],
+                            backgroundColor: 'rgba(138, 43, 226, 0.3)'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 1
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Refresh dashboard button
+        document.getElementById('refreshDashboard')?.addEventListener('click', function() {
+            // In a real implementation, this would fetch updated data from the server
+            alert('Refreshing dashboard data...');
+        });
+        
+        // Timeframe buttons
+        document.querySelectorAll('[data-timeframe]').forEach(button => {
+            button.addEventListener('click', function() {
+                // Remove active class from all buttons in the same group
+                this.parentElement.querySelectorAll('.btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                
+                // In a real implementation, this would update the chart with data for the selected timeframe
+                console.log(`Timeframe changed to ${this.dataset.timeframe}`);
+            });
+        });
+    });
+</script>
+{% endblock %}

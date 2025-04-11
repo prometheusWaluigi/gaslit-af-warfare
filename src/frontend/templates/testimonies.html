@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}GASLIT-AF WARSTACK - Testimonies{% endblock %}
+
+{% block extra_css %}
+<style>
+    .testimony-card {
+        border-left: 4px solid var(--primary-color);
+        margin-bottom: 2rem;
+        transition: transform 0.2s;
+    }
+    
+    .testimony-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .testimony-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .testimony-date {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+    
+    .testimony-content {
+        margin-bottom: 1rem;
+    }
+    
+    .testimony-symptoms {
+        margin-top: 1rem;
+    }
+    
+    .filter-section {
+        background-color: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 0.25rem;
+        margin-bottom: 2rem;
+    }
+    
+    .filter-title {
+        font-size: 1.1rem;
+        font-weight: 500;
+        margin-bottom: 1rem;
+    }
+    
+    .symptom-filter {
+        margin-right: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .pagination-container {
+        margin-top: 2rem;
+    }
+    
+    .testimony-count {
+        background-color: rgba(138, 43, 226, 0.1);
+        padding: 0.5rem 1rem;
+        border-radius: 0.25rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .testimony-count strong {
+        color: var(--primary-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Testimonies</h1>
+            <a href="{{ url_for('tell_your_story') }}" class="btn btn-primary">
+                <i class="fas fa-plus-circle me-2"></i> Share Your Story
+            </a>
+        </div>
+        
+        <div class="testimony-count">
+            <i class="fas fa-comments me-2"></i> Showing <strong>{{ testimonies|length }}</strong> testimonies from our database
+        </div>
+        
+        <!-- Filters -->
+        <div class="filter-section">
+            <div class="filter-title">
+                <i class="fas fa-filter me-2"></i> Filter Testimonies
+            </div>
+            
+            <form id="filter-form" class="mb-3">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="search-term" class="form-label">Search</label>
+                        <input type="text" class="form-control" id="search-term" placeholder="Search by keyword...">
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label for="sort-by" class="form-label">Sort By</label>
+                        <select class="form-select" id="sort-by" aria-label="Sort testimonies by">
+                            <option value="date-desc" selected>Newest First</option>
+                            <option value="date-asc">Oldest First</option>
+                            <option value="symptoms-desc">Most Symptoms</option>
+                            <option value="symptoms-asc">Fewest Symptoms</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label for="time-period" class="form-label">Time Period</label>
+                        <select class="form-select" id="time-period" aria-label="Filter by time period">
+                            <option value="all" selected>All Time</option>
+                            <option value="month">Past Month</option>
+                            <option value="6months">Past 6 Months</option>
+                            <option value="year">Past Year</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Filter by Symptoms</label>
+                    <div class="d-flex flex-wrap">
+                        <div class="symptom-filter">
+                            <input class="form-check-input" type="checkbox" id="filter-fatigue" value="fatigue">
+                            <label class="form-check-label" for="filter-fatigue">Fatigue</label>
+                        </div>
+                        <div class="symptom-filter">
+                            <input class="form-check-input" type="checkbox" id="filter-brain-fog" value="brain fog">
+                            <label class="form-check-label" for="filter-brain-fog">Brain Fog</label>
+                        </div>
+                        <div class="symptom-filter">
+                            <input class="form-check-input" type="checkbox" id="filter-tremors" value="tremors">
+                            <label class="form-check-label" for="filter-tremors">Tremors</label>
+                        </div>
+                        <div class="symptom-filter">
+                            <input class="form-check-input" type="checkbox" id="filter-pots" value="pots">
+                            <label class="form-check-label" for="filter-pots">POTS</label>
+                        </div>
+                        <div class="symptom-filter">
+                            <input class="form-check-input" type="checkbox" id="filter-tachycardia" value="tachycardia">
+                            <label class="form-check-label" for="filter-tachycardia">Tachycardia</label>
+                        </div>
+                        <div class="symptom-filter">
+                            <input class="form-check-input" type="checkbox" id="filter-neuropathy" value="neuropathy">
+                            <label class="form-check-label" for="filter-neuropathy">Neuropathy</label>
+                        </div>
+                        <div class="symptom-filter">
+                            <input class="form-check-input" type="checkbox" id="filter-mcas" value="mcas">
+                            <label class="form-check-label" for="filter-mcas">MCAS</label>
+                        </div>
+                        <div class="symptom-filter">
+                            <input class="form-check-input" type="checkbox" id="filter-dysautonomia" value="dysautonomia">
+                            <label class="form-check-label" for="filter-dysautonomia">Dysautonomia</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-2"></i> Apply Filters
+                    </button>
+                    <button type="reset" class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-2"></i> Clear Filters
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Testimonies List -->
+        <div id="testimonies-container">
+            {% if testimonies %}
+                {% for testimony in testimonies %}
+                    <div class="card testimony-card p-4">
+                        <div class="testimony-header">
+                            <h4>{{ testimony.name }}</h4>
+                            <span class="testimony-date">{{ testimony.date }}</span>
+                        </div>
+                        
+                        <div class="testimony-content">
+                            <p>{{ testimony.story }}</p>
+                        </div>
+                        
+                        {% if testimony.symptoms %}
+                            <div class="testimony-symptoms">
+                                {% for symptom in testimony.symptoms %}
+                                    <span class="badge bg-secondary me-1 mb-1">{{ symptom }}</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i> No testimonies have been submitted yet. Be the first to share your story!
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Pagination -->
+        {% if testimonies and testimonies|length > 10 %}
+            <div class="pagination-container d-flex justify-content-center">
+                <nav aria-label="Testimony pagination">
+                    <ul class="pagination">
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#" tabindex="-1" aria-disabled="true">Previous</a>
+                        </li>
+                        <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                        <li class="page-item"><a class="page-link" href="#">2</a></li>
+                        <li class="page-item"><a class="page-link" href="#">3</a></li>
+                        <li class="page-item">
+                            <a class="page-link" href="#">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        {% endif %}
+        
+        <!-- Call to Action -->
+        <div class="card mt-5 bg-light">
+            <div class="card-body p-4 text-center">
+                <h3>Your Story Matters</h3>
+                <p class="lead">Help us build a comprehensive picture of systemic impacts by sharing your experience.</p>
+                <a href="{{ url_for('tell_your_story') }}" class="btn btn-primary btn-lg mt-2">Share Your Story</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Filter form handling
+        const filterForm = document.getElementById('filter-form');
+        if (filterForm) {
+            filterForm.addEventListener('submit', function(event) {
+                event.preventDefault();
+                
+                // In a real implementation, this would filter the testimonies
+                // based on the selected criteria, either via AJAX or client-side filtering
+                
+                const searchTerm = document.getElementById('search-term').value;
+                const sortBy = document.getElementById('sort-by').value;
+                const timePeriod = document.getElementById('time-period').value;
+                
+                // Get selected symptoms
+                const selectedSymptoms = Array.from(
+                    document.querySelectorAll('.symptom-filter input:checked')
+                ).map(checkbox => checkbox.value);
+                
+                console.log('Filtering with:', {
+                    searchTerm,
+                    sortBy,
+                    timePeriod,
+                    selectedSymptoms
+                });
+                
+                // For demo purposes, just show an alert
+                alert('Filters applied! In a real implementation, this would filter the testimonies.');
+            });
+            
+            // Reset button handling
+            filterForm.addEventListener('reset', function() {
+                // In a real implementation, this would reset the filters and show all testimonies
+                setTimeout(() => {
+                    alert('Filters cleared! In a real implementation, this would show all testimonies.');
+                }, 10);
+            });
+        }
+    });
+</script>
+{% endblock %}

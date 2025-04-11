@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}GASLIT-AF WARSTACK - Upload Genome{% endblock %}
+
+{% block extra_css %}
+<style>
+    .upload-container {
+        background-color: #f8f9fa;
+        border: 2px dashed #ced4da;
+        border-radius: 5px;
+        padding: 2rem;
+        text-align: center;
+        margin-bottom: 2rem;
+        transition: all 0.3s ease;
+    }
+    
+    .upload-container:hover {
+        border-color: var(--primary-color);
+        background-color: rgba(138, 43, 226, 0.05);
+    }
+    
+    .upload-icon {
+        font-size: 3rem;
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+    }
+    
+    .file-info {
+        background-color: white;
+        border-radius: 5px;
+        padding: 1rem;
+        margin-top: 1rem;
+        display: none;
+    }
+    
+    .privacy-notice {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 2rem;
+        padding: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+    }
+    
+    .format-info {
+        background-color: rgba(138, 43, 226, 0.05);
+        border-left: 4px solid var(--primary-color);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .genome-card {
+        transition: transform 0.2s;
+    }
+    
+    .genome-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .status-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <h1 class="mb-4">Upload Genome Data</h1>
+        
+        <div class="format-info mb-4">
+            <h5><i class="fas fa-info-circle me-2"></i>Supported Formats</h5>
+            <p>We accept genetic data in the following formats:</p>
+            <ul>
+                <li><strong>VCF (Variant Call Format)</strong> - Standard format for storing gene sequence variations</li>
+                <li><strong>FASTQ</strong> - Text-based format for storing nucleotide sequences and quality scores</li>
+                <li><strong>23andMe</strong> - Raw data exports from 23andMe (.txt or .csv)</li>
+                <li><strong>AncestryDNA</strong> - Raw data exports from AncestryDNA (.txt or .csv)</li>
+            </ul>
+            <p class="mb-0">Files can be compressed (.gz, .zip) to reduce upload time.</p>
+        </div>
+        
+        <form method="POST" action="{{ url_for('upload_genome') }}" enctype="multipart/form-data" class="needs-validation" novalidate>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-dna me-2"></i> Genome Upload
+                </div>
+                <div class="card-body">
+                    <div class="upload-container" id="upload-container">
+                        <div class="upload-icon">
+                            <i class="fas fa-file-upload"></i>
+                        </div>
+                        <h4>Drag & Drop Your Genome File</h4>
+                        <p class="text-muted">or click to browse files</p>
+                        <input type="file" class="form-control visually-hidden" id="genome_file" name="genome_file" accept=".vcf,.fastq,.txt,.csv,.gz,.zip" required>
+                        <button type="button" class="btn btn-outline-primary mt-3" id="browse-button">Browse Files</button>
+                        
+                        <div class="file-info mt-4" id="file-info">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-file-alt me-3 fs-2 text-primary"></i>
+                                <div>
+                                    <h5 class="mb-1" id="file-name">filename.vcf</h5>
+                                    <p class="mb-0 text-muted" id="file-size">Size: 15.2 MB</p>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-danger ms-auto" id="remove-file">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="data-source" class="form-label">Data Source</label>
+                        <select class="form-select" id="data-source" name="data_source" aria-label="Select data source">
+                            <option value="" selected disabled>Select the source of your genetic data</option>
+                            <option value="23andme">23andMe</option>
+                            <option value="ancestry">AncestryDNA</option>
+                            <option value="myheritage">MyHeritage</option>
+                            <option value="ftdna">FamilyTreeDNA</option>
+                            <option value="whole_genome">Whole Genome Sequencing</option>
+                            <option value="whole_exome">Whole Exome Sequencing</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Additional Notes (Optional)</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="Any additional information about your genetic data..."></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="consent" name="consent" required>
+                    <label class="form-check-label" for="consent">
+                        I consent to having my genetic data analyzed by the GASLIT-AF WARSTACK system.
+                    </label>
+                    <div class="invalid-feedback">
+                        You must consent to upload your genetic data.
+                    </div>
+                </div>
+                
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="research-consent" name="research_consent">
+                    <label class="form-check-label" for="research-consent">
+                        I consent to my anonymized genetic data being used for research purposes.
+                    </label>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary btn-lg" id="upload-button" disabled>Upload Genome</button>
+            </div>
+            
+            <div class="privacy-notice">
+                <h6>Privacy & Security Notice</h6>
+                <p class="mb-0">Your genetic data is encrypted during transit and storage. We do not share your raw genetic data with any third parties. Analysis is performed on our secure servers, and you can request deletion of your data at any time. For research purposes, only anonymized, aggregated data may be used if you provide consent.</p>
+            </div>
+        </form>
+        
+        {% if uploaded_genomes and uploaded_genomes|length > 0 %}
+            <h3 class="mt-5 mb-4">Your Uploaded Genomes</h3>
+            
+            <div class="row">
+                {% for genome in uploaded_genomes %}
+                    <div class="col-md-6 mb-4">
+                        <div class="card genome-card h-100">
+                            {% if genome.status == 'analyzed' %}
+                                <div class="status-badge">
+                                    <span class="badge bg-success">Analyzed</span>
+                                </div>
+                            {% elif genome.status == 'processing' %}
+                                <div class="status-badge">
+                                    <span class="badge bg-warning text-dark">Processing</span>
+                                </div>
+                            {% else %}
+                                <div class="status-badge">
+                                    <span class="badge bg-secondary">Pending</span>
+                                </div>
+                            {% endif %}
+                            
+                            <div class="card-body">
+                                <h5 class="card-title">{{ genome.filename }}</h5>
+                                <p class="card-text text-muted">Uploaded: {{ genome.upload_date }}</p>
+                                <p class="card-text">Size: {{ (genome.size / 1000000)|round(2) }} MB</p>
+                                
+                                {% if genome.status == 'analyzed' %}
+                                    <a href="#" class="btn btn-primary">View Analysis</a>
+                                {% elif genome.status == 'processing' %}
+                                    <button class="btn btn-secondary" disabled>Processing...</button>
+                                {% else %}
+                                    <button class="btn btn-secondary" disabled>Pending Analysis</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const uploadContainer = document.getElementById('upload-container');
+        const fileInput = document.getElementById('genome_file');
+        const browseButton = document.getElementById('browse-button');
+        const fileInfo = document.getElementById('file-info');
+        const fileName = document.getElementById('file-name');
+        const fileSize = document.getElementById('file-size');
+        const removeFileButton = document.getElementById('remove-file');
+        const uploadButton = document.getElementById('upload-button');
+        const consentCheckbox = document.getElementById('consent');
+        
+        // Browse button click handler
+        browseButton.addEventListener('click', function() {
+            fileInput.click();
+        });
+        
+        // File input change handler
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                displayFileInfo(this.files[0]);
+            }
+        });
+        
+        // Drag and drop handlers
+        uploadContainer.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadContainer.classList.add('border-primary');
+        });
+        
+        uploadContainer.addEventListener('dragleave', function() {
+            uploadContainer.classList.remove('border-primary');
+        });
+        
+        uploadContainer.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadContainer.classList.remove('border-primary');
+            
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                displayFileInfo(e.dataTransfer.files[0]);
+            }
+        });
+        
+        // Remove file button handler
+        removeFileButton.addEventListener('click', function() {
+            fileInput.value = '';
+            fileInfo.style.display = 'none';
+            uploadButton.disabled = true;
+        });
+        
+        // Consent checkbox handler
+        consentCheckbox.addEventListener('change', function() {
+            updateUploadButtonState();
+        });
+        
+        // Display file information
+        function displayFileInfo(file) {
+            fileName.textContent = file.name;
+            
+            // Format file size
+            let size = file.size;
+            let sizeStr = '';
+            
+            if (size < 1024) {
+                sizeStr = size + ' bytes';
+            } else if (size < 1024 * 1024) {
+                sizeStr = (size / 1024).toFixed(2) + ' KB';
+            } else {
+                sizeStr = (size / (1024 * 1024)).toFixed(2) + ' MB';
+            }
+            
+            fileSize.textContent = 'Size: ' + sizeStr;
+            fileInfo.style.display = 'block';
+            
+            updateUploadButtonState();
+        }
+        
+        // Update upload button state
+        function updateUploadButtonState() {
+            uploadButton.disabled = !(fileInput.files.length > 0 && consentCheckbox.checked);
+        }
+        
+        // Form validation
+        const form = document.querySelector('.needs-validation');
+        
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            
+            form.classList.add('was-validated');
+        });
+    });
+</script>
+{% endblock %}
