@@ -20,7 +20,7 @@ import logging
 
 # Optional imports for specialized genetic analysis
 try:
-    import allel
+    import scikit_allel as allel
     HAS_ALLEL = True
 except ImportError:
     HAS_ALLEL = False
@@ -30,6 +30,12 @@ try:
     HAS_BIOPYTHON = True
 except ImportError:
     HAS_BIOPYTHON = False
+
+# Add allel and SeqIO to module namespace for mocking in tests
+if not HAS_ALLEL:
+    allel = None
+if not HAS_BIOPYTHON:
+    SeqIO = None
 
 
 class GeneticRiskScanner:

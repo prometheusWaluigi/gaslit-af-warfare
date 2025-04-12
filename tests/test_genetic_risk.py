@@ -79,11 +79,11 @@ class TestGeneticRiskScanner:
         assert scanner.params['collapse_threshold'] == custom_config['params']['collapse_threshold']
     
     @patch('src.genetic_risk.genetic_scanner.HAS_ALLEL', True)
-    @patch('src.genetic_risk.genetic_scanner.allel.read_vcf')
-    def test_load_vcf(self, mock_read_vcf, mock_vcf_data):
+    @patch('src.genetic_risk.genetic_scanner.allel')
+    def test_load_vcf(self, mock_allel, mock_vcf_data):
         """Test that the load_vcf method correctly loads VCF data."""
         # Set up the mock
-        mock_read_vcf.return_value = mock_vcf_data['callset']
+        mock_allel.read_vcf.return_value = mock_vcf_data['callset']
         
         # Create a temporary VCF file
         with tempfile.NamedTemporaryFile(suffix='.vcf') as temp_vcf:
@@ -94,7 +94,7 @@ class TestGeneticRiskScanner:
             vcf_data = scanner.load_vcf(temp_vcf.name)
             
             # Check that the mock was called with the correct file path
-            mock_read_vcf.assert_called_once_with(temp_vcf.name)
+            mock_allel.read_vcf.assert_called_once_with(temp_vcf.name)
             
             # Check that the returned data has the expected structure
             assert 'callset' in vcf_data
@@ -145,9 +145,12 @@ class TestGeneticRiskScanner:
             assert gene in risk_results['risk_scores']
         
         # Check that the risk metrics are in the expected range
-        assert 0 <= risk_results['fragility_gamma'] <= 1
-        assert 0 <= risk_results['allostatic_lambda'] <= 1.2  # Can be slightly higher than 1 due to calculation
-        assert 0 <= risk_results['allostatic_omega'] <= 1
+        assert isinstance(risk_results['fragility_gamma'], float)
+        assert isinstance(risk_results['allostatic_lambda'], float)
+        assert isinstance(risk_results['allostatic_omega'], float)
+        assert 0.0 <= risk_results['fragility_gamma'] <= 1.0
+        assert 0.0 <= risk_results['allostatic_lambda'] <= 1.2  # Can be slightly higher than 1 due to calculation
+        assert 0.0 <= risk_results['allostatic_omega'] <= 1.0
         
         # Check that the risk category is one of the expected values
         assert risk_results['risk_category'] in [

@@ -115,13 +115,19 @@ def index():
 @app.route('/dashboard')
 def dashboard():
     """Render the dashboard page."""
-    return render_template('dashboard.html')
+    results = get_simulation_results()
+    testimonies_count = len(os.listdir('data/testimonies')) if os.path.exists('data/testimonies') else 0
+    genomes_count = len(os.listdir('data/genomes')) if os.path.exists('data/genomes') else 0
+    return render_template('dashboard.html', results=results, testimonies_count=testimonies_count, genomes_count=genomes_count)
 
 
 @app.route('/biological', methods=['GET', 'POST'])
 def biological():
     """Render the biological modeling page."""
-    if request.method == 'POST':
+    if request.method == 'GET':
+        results = get_simulation_results()
+        return render_template('biological.html', results=results['biological'])
+    elif request.method == 'POST':
         # Get form data
         grid_size = int(request.form.get('grid_size', 100))
         time_steps = int(request.form.get('time_steps', 500))
@@ -169,7 +175,10 @@ def biological():
 @app.route('/genetic', methods=['GET', 'POST'])
 def genetic():
     """Render the genetic risk scanning page."""
-    if request.method == 'POST':
+    if request.method == 'GET':
+        results = get_simulation_results()
+        return render_template('genetic.html', results=results['genetic'])
+    elif request.method == 'POST':
         # Check if a file was uploaded
         if 'file' not in request.files:
             flash('No file part', 'error')
@@ -244,7 +253,7 @@ def institutional():
             model.run_simulation()
             
             # Generate visualizations
-            model.visualize_network(save_path='static/img/institutional/network.png')
+            model.generate_network_visualization(save_path='static/img/institutional/network.png')
             model.visualize_simulation_results(save_path='static/img/institutional/simulation_results.png')
             
             # Save results
@@ -475,6 +484,42 @@ def download_result(filename):
 def serve_static(filename):
     """Serve static files."""
     return send_from_directory('static', filename)
+
+
+def get_simulation_results():
+    """Get simulation results for all modules."""
+    results = {
+        'biological': None,
+        'genetic': None,
+        'institutional': None,
+        'legal': None
+    }
+    
+    # Load biological results
+    bio_results_path = os.path.join('results', 'biological_modeling', 'latest_results.json')
+    if os.path.exists(bio_results_path):
+        with open(bio_results_path, 'r') as f:
+            results['biological'] = json.load(f)
+    
+    # Load genetic results
+    genetic_results_path = os.path.join('results', 'genetic_risk', 'latest_results.json')
+    if os.path.exists(genetic_results_path):
+        with open(genetic_results_path, 'r') as f:
+            results['genetic'] = json.load(f)
+    
+    # Load institutional results
+    inst_results_path = os.path.join('results', 'institutional_feedback', 'latest_results.json')
+    if os.path.exists(inst_results_path):
+        with open(inst_results_path, 'r') as f:
+            results['institutional'] = json.load(f)
+    
+    # Load legal results
+    legal_results_path = os.path.join('results', 'legal_policy', 'latest_results.json')
+    if os.path.exists(legal_results_path):
+        with open(legal_results_path, 'r') as f:
+            results['legal'] = json.load(f)
+    
+    return results
 
 
 @app.errorhandler(404)

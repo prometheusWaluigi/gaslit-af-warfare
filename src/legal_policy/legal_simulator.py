@@ -18,17 +18,20 @@ from collections import defaultdict
 import logging
 
 # Optional imports for NLP and document processing
+HAS_SPACY = False
+HAS_PYPDF = False
+
 try:
     import spacy
     HAS_SPACY = True
 except ImportError:
-    HAS_SPACY = False
+    pass
 
 try:
-    import PyPDF2
-    HAS_PYPDF2 = True
+    from PyPDF2 import PdfReader
+    HAS_PYPDF = True
 except ImportError:
-    HAS_PYPDF2 = False
+    pass
 
 
 class LegalPolicySimulator:
@@ -66,21 +69,44 @@ class LegalPolicySimulator:
     
     def __init__(self, config=None):
         """Initialize the legal policy simulator."""
-        # Default configuration
-        self.config = {
-            'output_dir': 'results/legal_policy',
-            'simulation_steps': 100,
+        # Default parameters
+        self.params = {
+            'time_steps': 100,
             'initial_evidence_level': 0.1,
             'evidence_growth_rate': 0.02,
             'shield_decay_rate': 0.01,
+            'shield_breach_threshold': 0.6,
+            'simulation_steps': 100,
+            'evidence_threshold': 0.7,
+            'events': [
+                {
+                    "date": "2020-01-15",
+                    "type": "regulation",
+                    "title": "Emergency Use Authorization",
+                    "description": "FDA issues EUA for medical products",
+                    "impact": 0.8,
+                    "liability_shield": 0.9
+                }
+            ]
+        }
+
+        # Default configuration
+        self.config = {
+            'output_dir': 'results/legal_policy',
             'random_seed': 42,
             'timeline_start': '2019-01-01',
-            'timeline_end': '2025-01-01'
+            'timeline_end': '2025-01-01',
+            'simulation_steps': 100,
+            'evidence_growth_rate': 0.02
         }
         
         # Update with user configuration if provided
         if config is not None:
-            self.config.update(config)
+            if 'params' in config:
+                self.params.update(config['params'])
+            for key, value in config.items():
+                if key != 'params':
+                    self.config[key] = value
         
         # Set random seed for reproducibility
         np.random.seed(self.config['random_seed'])
@@ -99,16 +125,15 @@ class LegalPolicySimulator:
         )
         self.logger = logging.getLogger('LegalPolicySimulator')
         
-        # Initialize simulation state
+        self.reset_state()
+    
+    def reset_state(self):
+        """Reset the simulation state to initial values."""
         self.time = 0
         self.iteration = 0
-        self.evidence_level = np.zeros(4)  # Evidence levels for different claim types
-        self.shield_strength = np.array([
-            self.LEGAL_FRAMEWORKS['NCVIA']['shield_strength'],
-            self.LEGAL_FRAMEWORKS['PREP_Act']['shield_strength'],
-            self.LEGAL_FRAMEWORKS['EUA']['shield_strength'],
-            self.LEGAL_FRAMEWORKS['Common_Law']['shield_strength']
-        ])
+        self.evidence_level = 0.0  # Current evidence level
+        self.events = self.params['events']  # Legal events affecting the simulation
+        self.shield_strength = 1.0  # Current shield strength
         
         # Initialize NLP if available
         self.nlp = None
@@ -121,12 +146,53 @@ class LegalPolicySimulator:
         
         # Initialize history tracking
         self.history = {
-            'time': [0],
-            'evidence_level': [self.evidence_level.copy()],
-            'shield_strength': [self.shield_strength.copy()],
-            'breach_probability': [0.0]
+            'time': [],
+            'evidence_level': [],
+            'shield_strength': [],
+            'shield_breach_probability': []
         }
-    
+
+    def analyze_legal_corpus(self, documents):
+        """Analyze a corpus of legal documents."""
+        if not documents:
+            self.logger.warning("No documents provided for analysis")
+            return None
+
+        results = []
+        for doc_path in documents:
+            doc_analysis = self.analyze_document(doc_path)
+            if doc_analysis:
+                results.append({
+                    'path': doc_path,
+                    'analysis': doc_analysis
+                })
+
+        # Aggregate results
+        entity_counts = {}
+        key_phrase_counts = {}
+        total_sentiment = 0.0
+        
+        for result in results:
+            analysis = result['analysis']
+            if analysis and 'entities' in analysis:
+                for entity in analysis['entities']:
+                    entity_counts[entity['text']] = entity_counts.get(entity['text'], 0) + 1
+            if analysis and 'key_phrases' in analysis:
+                for phrase in analysis['key_phrases']:
+                    key_phrase_counts[phrase] = key_phrase_counts.get(phrase, 0) + 1
+            if analysis and 'sentiment' in analysis:
+                total_sentiment += analysis['sentiment']
+        
+        average_sentiment = total_sentiment / len(results) if results else 0.0
+        
+        return {
+            'document_count': len(results),
+            'documents': results,
+            'entity_counts': entity_counts,
+            'key_phrase_counts': key_phrase_counts,
+            'average_sentiment': average_sentiment
+        }
+
     def analyze_document(self, document_path):
         """Analyze a legal document for relevant information."""
         if not os.path.exists(document_path):
@@ -137,7 +203,7 @@ class LegalPolicySimulator:
         text = ""
         file_ext = os.path.splitext(document_path)[1].lower()
         
-        if file_ext == '.pdf' and HAS_PYPDF2:
+        if file_ext == '.pdf' and HAS_PYPDF:
             text = self.extract_text_from_pdf(document_path)
         elif file_ext in ['.txt', '.md', '.html', '.htm']:
             with open(document_path, 'r', encoding='utf-8') as f:
@@ -157,102 +223,94 @@ class LegalPolicySimulator:
             
             # Look for legal terms
             legal_terms = []
+            key_phrases = []
             for token in doc:
                 if token.text.lower() in ['liability', 'immunity', 'compensation', 'damages', 'lawsuit']:
                     legal_terms.append(token.text)
+                if token.dep_ == 'nsubj' and token.head.pos_ == 'VERB':
+                    key_phrases.append(f"{token.text} {token.head.text}")
             
             return {
-                'entities': entities,
+                'entities': [{'text': text, 'label': label} for text, label in entities],
                 'dates': dates,
                 'organizations': orgs,
                 'legal_terms': legal_terms,
+                'key_phrases': key_phrases,
+                'sentiment': 0.0,  # Default neutral sentiment
                 'text_length': len(text)
             }
         
         # Basic analysis without NLP
         return {
             'text_length': len(text),
-            'word_count': len(text.split())
+            'word_count': len(text.split()),
+            'sentiment': 0.0  # Default neutral sentiment
         }
     
     def extract_text_from_pdf(self, pdf_path):
         """Extract text from a PDF file."""
-        if not HAS_PYPDF2:
+        if not HAS_PYPDF:
             self.logger.error("PyPDF2 is required for PDF processing but not installed.")
             return ""
         
         text = ""
         try:
-            with open(pdf_path, 'rb') as f:
-                pdf_reader = PdfReader(f)
-                for page_num in range(len(pdf_reader.pages)):
-                    text += pdf_reader.pages[page_num].extract_text()
+            pdf_reader = PdfReader(pdf_path)
+            for page_num in range(len(pdf_reader.pages)):
+                text += pdf_reader.pages[page_num].extract_text()
         except Exception as e:
             self.logger.error(f"Error extracting text from PDF: {e}")
         
         return text
     
-    def calculate_evidence_impact(self, new_evidence):
+    def calculate_evidence_impact(self):
         """Calculate the impact of new evidence on the simulation."""
-        # Convert evidence value to an impact on different claim types
-        # Claim types: [causation, failure_to_warn, negligence, fraud]
-        impact = np.zeros(4)
+        # Calculate impact based on current events
+        total_impact = 0.0
+        for event in self.events:
+            if 'impact' in event:
+                total_impact += event['impact']
         
-        # Distribute evidence impact across claim types
-        impact[0] = new_evidence * 0.4  # Causation
-        impact[1] = new_evidence * 0.3  # Failure to warn
-        impact[2] = new_evidence * 0.2  # Negligence
-        impact[3] = new_evidence * 0.1  # Fraud
+        # Normalize impact to [-1, 1] range
+        if total_impact != 0:
+            total_impact = np.clip(total_impact / len(self.events), -1, 1)
         
-        return impact
+        return total_impact
     
-    def calculate_shield_impact(self, evidence_change):
+    def calculate_shield_impact(self):
         """Calculate the impact of evidence on liability shields."""
-        # Different shields are affected differently by evidence types
-        # Shields: [NCVIA, PREP_Act, EUA, Common_Law]
+        # Calculate impact based on current events
+        total_impact = 0.0
+        for event in self.events:
+            if 'liability_shield' in event:
+                total_impact += event['liability_shield']
         
-        # Create impact matrix: rows=shields, cols=evidence types
-        impact_matrix = np.array([
-            [0.02, 0.03, 0.01, 0.05],  # NCVIA impact from each evidence type
-            [0.01, 0.02, 0.01, 0.04],  # PREP_Act impact
-            [0.03, 0.04, 0.02, 0.06],  # EUA impact
-            [0.05, 0.06, 0.04, 0.08]   # Common_Law impact
-        ])
+        # Normalize impact to [-1, 1] range
+        if total_impact != 0:
+            total_impact = np.clip(total_impact / len(self.events), -1, 1)
         
-        # Calculate shield decay based on evidence change
-        shield_decay = np.dot(impact_matrix, evidence_change)
-        
-        return shield_decay
+        return total_impact
     
-    def update_evidence_level(self, new_evidence=None):
+    def update_evidence_level(self):
         """Update the evidence level based on simulation state."""
-        if new_evidence is None:
-            # Default evidence growth
-            base_growth = self.config['evidence_growth_rate']
-            
-            # Random variation in evidence growth
-            variation = np.random.normal(0, 0.005, 4)
-            
-            # Calculate evidence change
-            evidence_change = base_growth + variation
-            
-            # Apply change to evidence levels
-            self.evidence_level = np.clip(self.evidence_level + evidence_change, 0, 1)
-        else:
-            # Apply specific new evidence
-            impact = self.calculate_evidence_impact(new_evidence)
-            self.evidence_level = np.clip(self.evidence_level + impact, 0, 1)
+        # Calculate evidence impact from events
+        impact = self.calculate_evidence_impact()
+        
+        # Apply impact to evidence level
+        self.evidence_level = np.clip(self.evidence_level + impact, 0, 1)
         
         return self.evidence_level
     
     def update_shield_strength(self):
         """Update the liability shield strength based on evidence levels."""
-        # Calculate evidence change since last update
-        prev_evidence = self.history['evidence_level'][-1]
-        evidence_change = self.evidence_level - prev_evidence
+        # Calculate shield decay
+        shield_decay = self.calculate_shield_impact()
         
-        # Calculate shield decay based on evidence change
-        shield_decay = self.calculate_shield_impact(evidence_change)
+        # Calculate evidence change since last update
+        if self.history['evidence_level']:
+            prev_evidence = self.history['evidence_level'][-1]
+            evidence_change = self.evidence_level - prev_evidence
+            shield_decay += 0.1 * evidence_change  # Additional decay based on evidence change
         
         # Apply decay to shield strength
         self.shield_strength = np.clip(self.shield_strength - shield_decay, 0, 1)
@@ -298,21 +356,21 @@ class LegalPolicySimulator:
         
         # Record history
         self.history['time'].append(self.time)
-        self.history['evidence_level'].append(self.evidence_level.copy())
-        self.history['shield_strength'].append(self.shield_strength.copy())
-        self.history['breach_probability'].append(breach_prob)
+        self.history['evidence_level'].append(self.evidence_level)
+        self.history['shield_strength'].append(self.shield_strength)
+        self.history['shield_breach_probability'].append(breach_prob)
         
         return {
             'time': self.time,
-            'evidence_level': self.evidence_level.copy(),
-            'shield_strength': self.shield_strength.copy(),
-            'breach_probability': breach_prob
+            'evidence_level': self.evidence_level,
+            'shield_strength': self.shield_strength,
+            'shield_breach_probability': breach_prob
         }
     
     def run_simulation(self, steps=None):
         """Run the simulation for the specified number of steps."""
         if steps is None:
-            steps = self.config['simulation_steps']
+            steps = self.params['time_steps']
         
         self.logger.info(f"Running legal policy simulation for {steps} steps")
         
@@ -330,20 +388,21 @@ class LegalPolicySimulator:
     def get_results(self):
         """Get the simulation results."""
         return {
-            'config': self.config,
+            'params': self.params,
             'final_state': {
                 'time': self.time,
-                'evidence_level': self.evidence_level.tolist(),
-                'shield_strength': self.shield_strength.tolist(),
-                'breach_probability': self.calculate_shield_breach_probability()
+                'evidence_level': self.evidence_level,
+                'shield_strength': self.shield_strength,
+                'shield_breach_probability': self.calculate_shield_breach_probability()
             },
             'history': {
                 'time': self.history['time'],
-                'evidence_level': [e.tolist() for e in self.history['evidence_level']],
-                'shield_strength': [s.tolist() for s in self.history['shield_strength']],
-                'breach_probability': self.history['breach_probability']
+                'evidence_level': self.history['evidence_level'],
+                'shield_strength': self.history['shield_strength'],
+                'shield_breach_probability': self.history['shield_breach_probability']
             },
-            'frameworks': self.LEGAL_FRAMEWORKS
+            'frameworks': self.LEGAL_FRAMEWORKS,
+            'events': self.events
         }
     
     def visualize_simulation_results(self, save_path=None):
@@ -355,28 +414,22 @@ class LegalPolicySimulator:
         # Create figure with subplots
         fig, axs = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
         
-        # Plot evidence levels
-        for i, claim_type in enumerate(['Causation', 'Failure to Warn', 'Negligence', 'Fraud']):
-            evidence_values = [e[i] for e in self.history['evidence_level']]
-            axs[0].plot(self.history['time'], evidence_values, label=claim_type)
-        
+        # Plot evidence level
+        axs[0].plot(self.history['time'], self.history['evidence_level'], 'b-', label='Evidence Level')
         axs[0].set_ylabel('Evidence Level')
-        axs[0].set_title('Evidence Levels by Claim Type')
+        axs[0].set_title('Evidence Level Over Time')
         axs[0].legend()
         axs[0].grid(True)
         
-        # Plot shield strengths
-        for i, framework in enumerate(['NCVIA', 'PREP Act', 'EUA', 'Common Law']):
-            shield_values = [s[i] for s in self.history['shield_strength']]
-            axs[1].plot(self.history['time'], shield_values, label=framework)
-        
+        # Plot shield strength
+        axs[1].plot(self.history['time'], self.history['shield_strength'], 'g-', label='Shield Strength')
         axs[1].set_ylabel('Shield Strength')
-        axs[1].set_title('Liability Shield Strength')
+        axs[1].set_title('Shield Strength Over Time')
         axs[1].legend()
         axs[1].grid(True)
         
         # Plot breach probability
-        axs[2].plot(self.history['time'], self.history['breach_probability'], 'r-')
+        axs[2].plot(self.history['time'], self.history['shield_breach_probability'], 'r-')
         axs[2].set_ylabel('Probability')
         axs[2].set_xlabel('Time')
         axs[2].set_title('Liability Shield Breach Probability')
@@ -384,7 +437,7 @@ class LegalPolicySimulator:
         
         # Add overall title
         fig.suptitle('Legal Policy Simulation Results', fontsize=16)
-        plt.tight_layout(rect=[0, 0, 1, 0.97])  # Adjust for suptitle
+        plt.tight_layout(rect=(0, 0, 1, 0.97))  # Adjust for suptitle
         
         # Save if path provided
         if save_path:
@@ -393,16 +446,16 @@ class LegalPolicySimulator:
         
         return fig
     
-    def save_results(self, filename=None):
+    def save_results(self, results=None, filename=None):
         """Save the simulation results to a file."""
+        if results is None:
+            results = self.get_results()
+            
         if filename is None:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             filename = f"legal_simulation_{timestamp}.json"
         
         filepath = os.path.join(self.config['output_dir'], filename)
-        
-        # Get results
-        results = self.get_results()
         
         # Save to file
         with open(filepath, 'w') as f:
