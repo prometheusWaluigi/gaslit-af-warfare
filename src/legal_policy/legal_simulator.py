@@ -466,22 +466,24 @@ class LegalPolicySimulator:
         return filepath
 
 
-def run_sample_simulation():
+def run_sample_simulation(config=None, visualize=False, save_results=False):
     """Run a sample legal policy simulation."""
-    # Create a simulator with default configuration
-    simulator = LegalPolicySimulator()
+    # Create a simulator with provided or default configuration
+    simulator = LegalPolicySimulator(config)
     
     # Run the simulation
     simulator.run_simulation(steps=50)
     
-    # Visualize the results
     output_dir = simulator.config['output_dir']
     os.makedirs(output_dir, exist_ok=True)
-    
-    simulator.visualize_simulation_results(save_path=os.path.join(output_dir, 'legal_simulation_results.png'))
-    
-    # Save the results
-    simulator.save_results('sample_results.json')
+
+    if visualize:
+        simulator.visualize_simulation_results(
+            save_path=os.path.join(output_dir, 'legal_simulation_results.png')
+        )
+
+    if save_results:
+        simulator.save_results('sample_results.json')
     
     print("Sample legal policy simulation completed successfully.")
     print(f"Results saved to {output_dir}")

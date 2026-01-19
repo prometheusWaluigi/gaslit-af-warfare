@@ -795,23 +795,25 @@ class InstitutionalFeedbackModel:
         return filepath
 
 
-def run_sample_simulation():
+def run_sample_simulation(config=None, visualize=False, save_results=False):
     """Run a sample institutional feedback simulation."""
-    # Create a model with default configuration
-    model = InstitutionalFeedbackModel()
+    # Create a model with provided or default configuration
+    model = InstitutionalFeedbackModel(config)
     
     # Run the simulation
     model.run_simulation(steps=50)
     
-    # Visualize the results
     output_dir = model.config['output_dir']
     os.makedirs(output_dir, exist_ok=True)
-    
-    model.visualize_network(save_path=os.path.join(output_dir, 'institutional_network.png'))
-    model.visualize_simulation_results(save_path=os.path.join(output_dir, 'simulation_results.png'))
-    
-    # Save the results
-    model.save_results('sample_results.json')
+
+    if visualize:
+        model.visualize_network(save_path=os.path.join(output_dir, 'institutional_network.png'))
+        model.visualize_simulation_results(
+            save_path=os.path.join(output_dir, 'simulation_results.png')
+        )
+
+    if save_results:
+        model.save_results('sample_results.json')
     
     print("Sample institutional feedback simulation completed successfully.")
     print(f"Results saved to {output_dir}")
