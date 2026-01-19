@@ -90,6 +90,7 @@ class NeuroimmuneDynamics:
         
         # Initialize state variables
         self.time = 0.0
+        self.t = 0.0
         self.iteration = 0
         self.grid = None
         
@@ -156,6 +157,7 @@ class NeuroimmuneDynamics:
     def reset_state(self):
         """Reset the simulation state to initial values."""
         self.time = 0.0
+        self.t = 0.0
         self.iteration = 0
         
         # Clear history
@@ -392,6 +394,8 @@ class NeuroimmuneDynamics:
         
         elapsed_time = time.time() - start_time
         print(f"Simulation completed in {elapsed_time:.2f} seconds")
+
+        self.t = self.time
         
         # Determine final attractor state
         if np.mean(self.neurotoxicity) > 0.7:
@@ -440,7 +444,14 @@ class NeuroimmuneDynamics:
         
         return self.attractor_states
     
-    def generate_phase_portrait(self, param1_range, param2_range, param1_name='diffusion_constant', param2_name='coupling_strength'):
+    def generate_phase_portrait(
+        self,
+        param1_range,
+        param2_range,
+        param1_name='diffusion_constant',
+        param2_name='coupling_strength',
+        time_steps=100,
+    ):
         """
         Generate a phase portrait by varying two parameters.
         
@@ -469,7 +480,7 @@ class NeuroimmuneDynamics:
                 sim.initialize_grid()
                 
                 # Run a short simulation
-                sim.run_simulation(time_steps=100)
+                sim.run_simulation(time_steps=time_steps)
                 
                 # Compute a metric for the phase portrait
                 # (e.g., average value, variance, etc.)
@@ -650,7 +661,8 @@ def run_sample_simulation(config=None, visualize=False, save_results=False):
     simulator.initialize_grid()
     
     # Run the simulation
-    simulator.run_simulation(time_steps=500)
+    time_steps = simulator.config.get('time_steps', 500)
+    simulator.run_simulation(time_steps=time_steps)
     
     output_dir = simulator.config['output_dir']
     os.makedirs(output_dir, exist_ok=True)
@@ -662,9 +674,15 @@ def run_sample_simulation(config=None, visualize=False, save_results=False):
         )
 
         # Generate and visualize a phase portrait
-        param1_range = np.linspace(0.1, 1.0, 10)
-        param2_range = np.linspace(0.1, 1.0, 10)
-        simulator.generate_phase_portrait(param1_range, param2_range)
+        phase_portrait_points = simulator.config.get('phase_portrait_points', 10)
+        phase_portrait_steps = simulator.config.get('phase_portrait_steps', 100)
+        param1_range = np.linspace(0.1, 1.0, phase_portrait_points)
+        param2_range = np.linspace(0.1, 1.0, phase_portrait_points)
+        simulator.generate_phase_portrait(
+            param1_range,
+            param2_range,
+            time_steps=phase_portrait_steps,
+        )
         simulator.visualize_phase_portrait(
             save_path=os.path.join(output_dir, 'phase_portrait.png')
         )

@@ -472,7 +472,8 @@ def run_sample_simulation(config=None, visualize=False, save_results=False):
     simulator = LegalPolicySimulator(config)
     
     # Run the simulation
-    simulator.run_simulation(steps=50)
+    steps = simulator.config.get('simulation_steps', 50)
+    simulator.run_simulation(steps=steps)
     
     output_dir = simulator.config['output_dir']
     os.makedirs(output_dir, exist_ok=True)

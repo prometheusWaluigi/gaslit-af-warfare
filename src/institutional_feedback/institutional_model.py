@@ -89,6 +89,10 @@ class InstitutionalFeedbackModel:
             'custom_actors_file': None,
             'use_custom_actors': False
         }
+
+        self.institutions = [
+            {'name': name, **props} for name, props in self.INSTITUTIONAL_ACTORS.items()
+        ]
         
         # Update with user configuration if provided
         if config is not None:
@@ -96,17 +100,9 @@ class InstitutionalFeedbackModel:
                 self.params.update(config['params'])
                 if 'institutions' in config['params']:
                     self.institutions = config['params']['institutions']
-                else:
-                    self.institutions = [
-                        {'name': name, **props} for name, props in self.INSTITUTIONAL_ACTORS.items()
-                    ]
             for key, value in config.items():
                 if key != 'params':
                     self.config[key] = value
-        else:
-            self.institutions = [
-                {'name': name, **props} for name, props in self.INSTITUTIONAL_ACTORS.items()
-            ]
         
         # Set random seed for reproducibility
         np.random.seed(self.config['random_seed'])
@@ -640,7 +636,7 @@ class InstitutionalFeedbackModel:
             return None
         
         # Create figure
-        plt.figure(figsize=(12, 10))
+        fig, ax = plt.subplots(figsize=(12, 10))
         
         # Get node positions using a layout algorithm
         pos = nx.spring_layout(network, seed=self.config['random_seed'])
@@ -671,34 +667,46 @@ class InstitutionalFeedbackModel:
         cmap = plt.get_cmap('Reds')
         
         # Draw the network with a single color
-        nodes = nx.draw_networkx_nodes(network, pos, 
-                                     node_size=int(sum(node_influence)/len(node_influence)), 
-                                     node_color='lightblue',
-                                     alpha=0.8,
-                                     node_shape='o')
+        nodes = nx.draw_networkx_nodes(
+            network,
+            pos,
+            ax=ax,
+            node_size=int(sum(node_influence) / len(node_influence)),
+            node_color='lightblue',
+            alpha=0.8,
+            node_shape='o',
+        )
         
-        edges = nx.draw_networkx_edges(network, pos, 
-                                     width=float(sum(edge_weights)/len(edge_weights)), 
-                                     alpha=0.6, 
-                                     edge_color='gray', 
-                                     arrows=True, 
-                                     arrowsize=15)
+        edges = nx.draw_networkx_edges(
+            network,
+            pos,
+            ax=ax,
+            width=float(sum(edge_weights) / len(edge_weights)),
+            alpha=0.6,
+            edge_color='gray',
+            arrows=True,
+            arrowsize=15,
+        )
         
-        labels = nx.draw_networkx_labels(network, pos, 
-                                       font_size=10, 
-                                       font_weight='bold')
+        labels = nx.draw_networkx_labels(
+            network,
+            pos,
+            ax=ax,
+            font_size=10,
+            font_weight='bold',
+        )
         
         # Add a colorbar for denial bias
         norm = Normalize(vmin=0, vmax=1)
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
-        cbar = plt.colorbar(sm)
+        cbar = fig.colorbar(sm, ax=ax)
         cbar.set_label('Denial Bias')
         
         # Add title and labels
-        plt.title('Institutional Feedback Network')
-        plt.axis('off')
-        plt.tight_layout()
+        ax.set_title('Institutional Feedback Network')
+        ax.axis('off')
+        fig.tight_layout()
         
         # Save if path provided
         if save_path:
@@ -801,7 +809,8 @@ def run_sample_simulation(config=None, visualize=False, save_results=False):
     model = InstitutionalFeedbackModel(config)
     
     # Run the simulation
-    model.run_simulation(steps=50)
+    steps = model.config.get('simulation_steps', 50)
+    model.run_simulation(steps=steps)
     
     output_dir = model.config['output_dir']
     os.makedirs(output_dir, exist_ok=True)
