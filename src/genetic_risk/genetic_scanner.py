@@ -770,50 +770,52 @@ class GeneticRiskScanner:
         return filepath
 
 
-def run_sample_analysis():
-    """Run a sample genetic risk analysis with simulated data."""
-    # Create a scanner with default configuration
-    scanner = GeneticRiskScanner()
+def run_sample_analysis(config=None, input_file=None, visualize=False, save_results=False):
+    """Run a sample genetic risk analysis with simulated data or a real file."""
+    # Create a scanner with provided or default configuration
+    scanner = GeneticRiskScanner(config)
     
-    # Create a simple simulated VCF-like data structure
     output_dir = scanner.config['output_dir']
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Simulate some results
-    scanner.results = {
-        'risk_scores': {
-            'TNXB': 0.8,
-            'COMT': 0.4,
-            'MTHFR': 1.2,
-            'RCCX': 0.6
-        },
-        'variant_counts': {
-            'TNXB': 1,
-            'COMT': 1,
-            'MTHFR': 2,
-            'RCCX': 1
-        },
-        'phenotype_index': 0.375,
-        'allostatic_collapse_risk': 0.62,
-        'detected_variants': [
-            {'gene': 'TNXB', 'id': 'rs121912172', 'chr': '6', 'pos': 32045572, 'risk_allele': 'A', 'count': 1},
-            {'gene': 'COMT', 'id': 'rs4680', 'chr': '22', 'pos': 19951271, 'risk_allele': 'A', 'count': 1},
-            {'gene': 'MTHFR', 'id': 'rs1801133', 'chr': '1', 'pos': 11856378, 'risk_allele': 'T', 'count': 1},
-            {'gene': 'MTHFR', 'id': 'rs1801131', 'chr': '1', 'pos': 11854476, 'risk_allele': 'C', 'count': 1},
-            {'gene': 'RCCX', 'id': 'rs397507444', 'chr': '6', 'pos': 32026839, 'risk_allele': 'C', 'count': 1}
-        ],
-        'file_type': 'Simulated',
-        'file_name': 'sample_data.vcf'
-    }
-    
-    # Generate a heatmap
-    scanner.generate_heatmap(save_path=os.path.join(output_dir, 'sample_heatmap.png'))
-    
-    # Generate a risk profile
-    risk_profile = scanner.generate_risk_profile(save_path=os.path.join(output_dir, 'sample_risk_profile.json'))
-    
-    # Save the results
-    scanner.save_results('sample_results.json')
+
+    if input_file:
+        scanner.analyze_file(input_file)
+    else:
+        # Simulate some results
+        scanner.results = {
+            'risk_scores': {
+                'TNXB': 0.8,
+                'COMT': 0.4,
+                'MTHFR': 1.2,
+                'RCCX': 0.6
+            },
+            'variant_counts': {
+                'TNXB': 1,
+                'COMT': 1,
+                'MTHFR': 2,
+                'RCCX': 1
+            },
+            'phenotype_index': 0.375,
+            'allostatic_collapse_risk': 0.62,
+            'detected_variants': [
+                {'gene': 'TNXB', 'id': 'rs121912172', 'chr': '6', 'pos': 32045572, 'risk_allele': 'A', 'count': 1},
+                {'gene': 'COMT', 'id': 'rs4680', 'chr': '22', 'pos': 19951271, 'risk_allele': 'A', 'count': 1},
+                {'gene': 'MTHFR', 'id': 'rs1801133', 'chr': '1', 'pos': 11856378, 'risk_allele': 'T', 'count': 1},
+                {'gene': 'MTHFR', 'id': 'rs1801131', 'chr': '1', 'pos': 11854476, 'risk_allele': 'C', 'count': 1},
+                {'gene': 'RCCX', 'id': 'rs397507444', 'chr': '6', 'pos': 32026839, 'risk_allele': 'C', 'count': 1}
+            ],
+            'file_type': 'Simulated',
+            'file_name': 'sample_data.vcf'
+        }
+
+    if visualize:
+        scanner.generate_heatmap(save_path=os.path.join(output_dir, 'sample_heatmap.png'))
+        scanner.generate_risk_profile(
+            save_path=os.path.join(output_dir, 'sample_risk_profile.json')
+        )
+
+    if save_results:
+        scanner.save_results('sample_results.json')
     
     print("Sample genetic risk analysis completed successfully.")
     print(f"Results saved to {output_dir}")

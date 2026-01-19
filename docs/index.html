@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GASLIT-AF WARSTACK</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: radial-gradient(circle at top, #1f2937, #0b0f19 60%);
+        color: #e5e7eb;
+      }
+
+      header {
+        padding: 48px 16px 24px;
+        text-align: center;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 2.6rem;
+        letter-spacing: 0.06em;
+      }
+
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 16px 64px;
+      }
+
+      .card {
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.35);
+      }
+
+      .card h2 {
+        margin-top: 0;
+        color: #93c5fd;
+      }
+
+      .steps {
+        display: grid;
+        gap: 12px;
+      }
+
+      code {
+        display: block;
+        background: #111827;
+        color: #a5f3fc;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(94, 234, 212, 0.2);
+        overflow-x: auto;
+      }
+
+      a {
+        color: #7dd3fc;
+      }
+
+      footer {
+        text-align: center;
+        padding: 24px 16px 48px;
+        color: #94a3b8;
+      }
+
+      .pill {
+        display: inline-block;
+        padding: 4px 12px;
+        background: rgba(56, 189, 248, 0.15);
+        border-radius: 999px;
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        font-size: 0.85rem;
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>GASLIT-AF WARSTACK</h1>
+      <p class="pill">Simulation &amp; advocacy stack</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Quick start (local)</h2>
+        <div class="steps">
+          <div>
+            <strong>1. Install dependencies</strong>
+            <code>python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt</code>
+          </div>
+          <div>
+            <strong>2. Run a sample simulation</strong>
+            <code>python gaslit-af-runner.py --module biological --save-results</code>
+          </div>
+          <div>
+            <strong>3. Launch the web UI</strong>
+            <code>cd src/frontend
+python app.py</code>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>GitHub Pages deployment</h2>
+        <p>
+          This site is deployed automatically from the <code>docs/</code> directory
+          on the <code>main</code> branch. Pushes to <code>main</code> trigger a GitHub
+          Actions workflow that publishes to GitHub Pages.
+        </p>
+        <p>
+          Configure GitHub Pages in your repository settings to use GitHub Actions
+          as the source.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Repository</h2>
+        <p>
+          Explore modules, simulation notebooks, and the Flask dashboard in the
+          project repository.
+        </p>
+        <p>
+          <a href="https://github.com/yourusername/gaslit-af-warstack">View on GitHub</a>
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Built for transparency, simulation, and advocacy.</p>
+    </footer>
+  </body>
+</html>

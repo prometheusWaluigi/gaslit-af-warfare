@@ -641,10 +641,10 @@ class NeuroimmuneDynamics:
         return results
 
 
-def run_sample_simulation():
-    """Run a sample simulation and visualize the results."""
-    # Create a simulator with default configuration
-    simulator = NeuroimmuneDynamics()
+def run_sample_simulation(config=None, visualize=False, save_results=False):
+    """Run a sample simulation and optionally visualize/save results."""
+    # Create a simulator with provided or default configuration
+    simulator = NeuroimmuneDynamics(config)
     
     # Initialize the grid
     simulator.initialize_grid()
@@ -652,20 +652,25 @@ def run_sample_simulation():
     # Run the simulation
     simulator.run_simulation(time_steps=500)
     
-    # Visualize the final state
     output_dir = simulator.config['output_dir']
     os.makedirs(output_dir, exist_ok=True)
-    
-    simulator.visualize_grid(grid=simulator.h, save_path=os.path.join(output_dir, 'final_state.png'))
-    
-    # Generate and visualize a phase portrait
-    param1_range = np.linspace(0.1, 1.0, 10)
-    param2_range = np.linspace(0.1, 1.0, 10)
-    simulator.generate_phase_portrait(param1_range, param2_range)
-    simulator.visualize_phase_portrait(save_path=os.path.join(output_dir, 'phase_portrait.png'))
-    
-    # Save the results
-    simulator.save_results()
+
+    if visualize:
+        simulator.visualize_grid(
+            grid=simulator.h,
+            save_path=os.path.join(output_dir, 'final_state.png')
+        )
+
+        # Generate and visualize a phase portrait
+        param1_range = np.linspace(0.1, 1.0, 10)
+        param2_range = np.linspace(0.1, 1.0, 10)
+        simulator.generate_phase_portrait(param1_range, param2_range)
+        simulator.visualize_phase_portrait(
+            save_path=os.path.join(output_dir, 'phase_portrait.png')
+        )
+
+    if save_results:
+        simulator.save_results()
     
     return simulator
 

@@ -148,6 +148,15 @@ Or use the provided test runner:
 ./run_tests.py
 ```
 
+## GitHub Pages
+
+This repository ships with a static landing page in `docs/index.html` and a GitHub Actions workflow
+that publishes the `docs/` folder to GitHub Pages.
+
+1. Push to the `main` branch.
+2. In repository settings → Pages, set the source to **GitHub Actions**.
+3. The `Deploy GitHub Pages` workflow will publish the static site automatically.
+
 ## Docker Support
 
 The project offers multiple Docker configurations to solve dependency issues and ensure consistent environment behavior across systems:
